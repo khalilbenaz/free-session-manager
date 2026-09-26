@@ -243,6 +243,48 @@ function renameSession(s, name) {
   broadcast({ t: 'session', s: publicView(s) });
 }
 
+function handleTerminalQueries(s, p, data) {
+  if (!p || typeof data !== 'string') return;
+  // Device Status Report cursor query (\x1b[6n)
+  if (data.includes('\x1b[6n')) {
+    try { p.write('\x1b[1;1R'); } catch { }
+  }
+  // Primary Device Attributes (\x1b[c)
+  if (data.includes('\x1b[c')) {
+    try { p.write('\x1b[?62;1;2;4;6;7;8;9;15;18;21;22c'); } catch { }
+  }
+  // Window size in pixels (\x1b[14t)
+  if (data.includes('\x1b[14t')) {
+    const cols = s.cols || 120;
+    const rows = s.rows || 32;
+    try { p.write(`\x1b[4;${rows * 16};${cols * 8}t`); } catch { }
+  }
+  // Foreground / Background color queries (OSC 10 / 11)
+  if (data.includes('\x1b]10;?')) {
+    try { p.write('\x1b]10;rgb:ffff/ffff/ffff\x1b\\'); } catch { }
+  }
+  if (data.includes('\x1b]11;?')) {
+    try { p.write('\x1b]11;rgb:1010/1111/1414\x1b\\'); } catch { }
+  }
+  if (data.includes('\x1b]12;?')) {
+    try { p.write('\x1b]12;rgb:ffff/ffff/ffff\x1b\\'); } catch { }
+  }
+  // Palette color queries (OSC 4;idx;?)
+  const osc4 = data.match(/\x1b\]4;(\d+);\?/g);
+  if (osc4 && osc4.length) {
+    let rep = '';
+    for (const m of osc4) {
+      const idx = m.match(/\d+/)[0];
+      rep += `\x1b]4;${idx};rgb:8080/8080/8080\x1b\\`;
+    }
+    try { p.write(rep); } catch { }
+  }
+  // Kitty Graphics probe
+  if (data.includes('\x1b_Gi=31337')) {
+    try { p.write('\x1b_Gi=31337;OK\x1b\\'); } catch { }
+  }
+}
+
 function spawnSession(s, { resume, fork } = {}) {
   const isOpencode = s.agent === 'opencode';
   const isOpenrouter = s.agent === 'openrouter';
@@ -359,6 +401,7 @@ function spawnSession(s, { resume, fork } = {}) {
 
   p.onData(d => {
     s.lastActivity = Date.now();
+    handleTerminalQueries(s, p, d);
     appendOut(s, d);
     if (s.status === 'starting') setStatus(s, 'idle');
   });
@@ -458,6 +501,7 @@ function switchAgent(s, to, override = {}) {
   s.model = override.model || useCfg.model || agentDefaults(to).model;
   s.effort = useCfg.effort || '';
   s.mode = useCfg.mode || '';
+  s.args = s.model ? `--model ${s.model}` : '';
 
   s.buf = '';
   broadcast({ t: 'clear', id: s.id });

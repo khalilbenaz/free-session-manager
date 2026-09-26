@@ -41,6 +41,18 @@ async function loadSettings() {
   try { SETTINGS = { ...SETTINGS, ...(await api('GET', '/api/settings')) }; } catch { }
   setLang(SETTINGS.lang); applySettings();
   publishLocale();
+  await loadAgentModels();
+}
+
+async function loadAgentModels() {
+  for (const ag of ['kilo', 'opencode', 'openrouter']) {
+    try {
+      const r = await api('GET', `/api/agents/${ag}/models`);
+      if (r && Array.isArray(r.models) && r.models.length > 0) {
+        AGENT_MODELS[ag] = r.models;
+      }
+    } catch { }
+  }
 }
 
 /** La locale vit dans app.js : panel.js en a besoin pour formater dates et nombres. */
@@ -86,6 +98,7 @@ function ensureTerm(id) {
   term.loadAddon(fit);
   term.loadAddon(new WebLinksAddon.WebLinksAddon((e, uri) => window.open(uri, '_blank')));
   term.open(el);
+  el.addEventListener('click', () => term.focus());
   term.onData(d => send({ t: 'input', id, d }));
   // clic / focus dans un panneau de la vue partagée : ce panneau devient le panneau actif
   term.textarea?.addEventListener('focus', () => {
@@ -942,24 +955,33 @@ async function saveSessionAsTemplate(id) {
 const AGENT_MODELS = {
   kilo: [
     { value: 'kilo/nvidia/nemotron-3-super-120b-a12b:free', label: '⚡ Nemotron 3 Super 120B (Free)' },
+    { value: 'kilo/nvidia/nemotron-3-ultra-550b-a55b:free', label: '⚡ Nemotron 3 Ultra 550B (Free)' },
+    { value: 'kilo/nvidia/nemotron-3.5-lightning:free', label: '⚡ Nemotron 3.5 Lightning (Free)' },
+    { value: 'kilo/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free', label: '⚡ Nemotron 3 Nano Omni (Free)' },
+    { value: 'kilo/kilo-auto/free', label: '⚡ Kilo Auto (Free)' },
     { value: 'kilo/openrouter/free', label: '⚡ OpenRouter Free (Auto)' },
     { value: 'kilo/liquid/lfm-2.5-2.6b:free', label: '⚡ Liquid LFM 2.5 2.6B (Free)' },
     { value: 'kilo/qwen/qwen3.8-27b:free', label: '⚡ Qwen 3.8 27B (Free)' },
     { value: 'kilo/google/gemma-4-31b-it', label: '⚡ Google Gemma 4 31B (Free)' },
     { value: 'kilo/google/gemma-4-26b-a4b-it', label: '⚡ Google Gemma 4 26B (Free)' },
     { value: 'kilo/cohere/north-mini-code:free', label: '⚡ Cohere North Mini Code (Free)' },
-    { value: 'kilo/poolside/laguna-s-2.1:free', label: '⚡ Poolside Laguna S 2.1 (Free)' },
-    { value: 'kilo/thinkingmachines/inkling-small:free', label: '⚡ Thinking Machines Inkling Small (Free)' },
     { value: 'kilo/stepfun/step-3.7-flash:free', label: '⚡ StepFun 3.7 Flash (Free)' },
+    { value: 'kilo/dots-studio/dots-3-note-preview:free', label: '⚡ Dots 3 Note Preview (Free)' },
+    { value: 'kilo/poolside/laguna-s-2.1:free', label: '⚡ Poolside Laguna S 2.1 (Free)' },
+    { value: 'kilo/poolside/laguna-xs-2.1:free', label: '⚡ Poolside Laguna XS 2.1 (Free)' },
     { value: 'kilo/inclusionai/ling-3.0-flash-fin:free', label: '⚡ InclusionAI Ling 3.0 Flash Fin (Free)' },
     { value: 'kilo/inclusionai/ling-3.0-flash-sante:free', label: '⚡ InclusionAI Ling 3.0 Flash Santé (Free)' },
+    { value: 'kilo/thinkingmachines/inkling-small:free', label: '⚡ Thinking Machines Inkling Small (Free)' },
   ],
   opencode: [
-    { value: 'opencode/nemotron-3-ultra-free', label: '💻 Nemotron 3 Ultra Free' },
-    { value: 'opencode/nemotron-3.5-lightning-free', label: '💻 Nemotron 3.5 Lightning Free' },
-    { value: 'opencode/ling-3.0-flash-fin-free', label: '💻 Ling 3.0 Flash Fin Free' },
-    { value: 'opencode/ling-3.0-flash-sante-free', label: '💻 Ling 3.0 Flash Santé Free' },
-    { value: 'opencode/minimax-m2.5-free', label: '💻 MiniMax M2.5 Free' },
+    { value: 'opencode/nemotron-3-ultra-free', label: '💻 Nemotron 3 Ultra (Free)' },
+    { value: 'opencode/nemotron-3.5-lightning-free', label: '💻 Nemotron 3.5 Lightning (Free)' },
+    { value: 'opencode/ling-3.0-flash-fin-free', label: '💻 Ling 3.0 Flash Fin (Free)' },
+    { value: 'opencode/longcat-2.5-preview-free', label: '💻 Longcat 2.5 Preview (Free)' },
+    { value: 'opencode/mimo-v2.6-flash-free', label: '💻 Mimo v2.6 Flash (Free)' },
+    { value: 'opencode/muse-spark-1.3-contributor-free', label: '💻 Muse Spark 1.3 Contributor (Free)' },
+    { value: 'opencode/space-bunny-free', label: '💻 Space Bunny (Free)' },
+    { value: 'opencode/big-pickle', label: '💻 Big Pickle (Free)' },
   ],
   openrouter: [
     { value: 'kilo/openrouter/free', label: '🌐 OpenRouter Free (Auto)' },
