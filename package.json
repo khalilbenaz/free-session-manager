@@ -1,0 +1,104 @@
+{
+  "name": "free-session-manager",
+  "version": "1.0.0",
+  "description": "Application de bureau et gestionnaire de sessions multi-agents 100% gratuit dédié aux modèles de Kilo, OpenCode et OpenRouter.",
+  "bin": {
+    "fsm": "bin/sm.js",
+    "free-session-manager": "bin/sm.js"
+  },
+  "main": "electron/main.js",
+  "files": [
+    "bin/",
+    "lib/",
+    "public/",
+    "scripts/",
+    "electron/",
+    "server.js",
+    "hook.js",
+    "pick-folder.ps1",
+    "README.md"
+  ],
+  "scripts": {
+    "postinstall": "node scripts/postinstall.js",
+    "start": "node server.js",
+    "app": "electron .",
+    "dist:mac": "electron-builder --mac --arm64",
+    "install:app": "npm run dist:mac && rm -rf \"/Applications/Free Session Manager.app\" && cp -R \"dist/mac-arm64/Free Session Manager.app\" /Applications/"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "free-session-manager",
+    "kilo",
+    "opencode",
+    "openrouter",
+    "free-models",
+    "terminal",
+    "sessions"
+  ],
+  "author": {
+    "name": "Khalil Benazzouz"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-web-links": "^0.12.0",
+    "@xterm/addon-webgl": "^0.19.0",
+    "@xterm/xterm": "^6.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "electron-updater": "^6.8.9",
+    "express": "^4.18.2",
+    "node-pty": "^1.1.0",
+    "ws": "^8.21.3"
+  },
+  "devDependencies": {
+    "electron": "^44.4.5",
+    "electron-builder": "^26.15.3"
+  },
+  "productName": "Free Session Manager",
+  "build": {
+    "appId": "com.free-session-manager.app",
+    "productName": "Free Session Manager",
+    "copyright": "Free Session Manager",
+    "asar": false,
+    "npmRebuild": false,
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "bin/**",
+      "lib/**",
+      "public/**",
+      "scripts/**",
+      "electron/**",
+      "server.js",
+      "hook.js",
+      "pick-folder.ps1",
+      "package.json",
+      "!**/*.pdb",
+      "!**/*.map",
+      "!test/**"
+    ],
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "category": "public.app-category.developer-tools",
+      "artifactName": "Free-Session-Manager-${version}-${arch}.${ext}",
+      "identity": "-",
+      "hardenedRuntime": false
+    },
+    "dmg": {
+      "title": "Free Session Manager ${version}"
+    }
+  }
+}

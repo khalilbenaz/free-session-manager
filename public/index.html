@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Free Session Manager</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="icon.svg">
+<link rel="stylesheet" href="xterm.css">
+<link rel="stylesheet" href="style.css">
+<meta name="sm-token" content="__SM_TOKEN__">
+<meta name="asm-token" content="__SM_TOKEN__">
+<meta name="csm-token" content="__SM_TOKEN__">
+<meta name="sm-version" content="__SM_VERSION__">
+<meta name="asm-version" content="__SM_VERSION__">
+<meta name="csm-version" content="__SM_VERSION__">
+</head>
+<body>
+<aside id="side">
+  <header>
+    <div class="brand"><img src="icon.svg" alt=""> <span class="lbl">Free Session Manager</span></div>
+    <button id="btnNew" class="primary" title="Nouvelle session (Ctrl+Alt+N)">+ <span class="lbl">Nouvelle</span></button>
+  </header>
+  <button id="btnPalette" class="palHint" title="Palette de commandes">🔍 <span class="lbl">Rechercher…</span> <kbd class="lbl" id="palKbd">Ctrl+K</kbd></button>
+  <div class="agent-filter-bar" id="sideFilterBar">
+    <button class="flt-btn active" data-filter="all">Tous</button>
+    <button class="flt-btn" data-filter="kilo">⚡ Kilo</button>
+    <button class="flt-btn" data-filter="opencode">💻 OpenCode</button>
+    <button class="flt-btn" data-filter="openrouter">🌐 OpenRouter</button>
+  </div>
+  <ul id="list"></ul>
+  <footer>
+    <button id="btnHistory" title="Reprendre une ancienne session (Ctrl+Alt+H)">🕘 <span class="lbl">Historique</span></button>
+    <button id="btnSettings" class="icon" title="Réglages (Ctrl+,)">⚙</button>
+    <button id="btnCompact" class="icon" title="Barre latérale compacte">⇤</button>
+    <span id="conn" class="conn off" title="Connexion au serveur"></span>
+  </footer>
+</aside>
+
+<main>
+  <div id="bar">
+    <span id="curDot" class="dot"></span>
+    <span id="curAgentBadge" class="agent-badge"></span>
+    <span id="curModelBadge" class="model-badge" role="button" tabindex="0" title="Modèle actif — cliquer pour changer de modèle"></span>
+    <span id="curName" class="name" title="Double-clic pour renommer"></span>
+    <button id="btnRename" class="ren show" title="Renommer (Ctrl+Alt+R)">✎</button>
+    <span id="curBranch" class="branch" hidden></span>
+    <span id="curCwd" class="cwd"></span>
+    <span id="curMsg" class="msg"></span>
+    <span id="curQueue" class="qbadge" hidden title="Prompts en attente"></span>
+    <span class="spacer"></span>
+    <span class="layouts" role="group" aria-label="Disposition">
+      <button data-layout="1" class="icon" title="Une session">▢</button>
+      <button data-layout="2c" class="icon" title="Deux colonnes">◫</button>
+      <button data-layout="2r" class="icon" title="Deux lignes">⊟</button>
+      <button data-layout="4" class="icon" title="Grille 2×2">⊞</button>
+    </span>
+    <button id="btnQuota" title="Afficher les quotas et limites de l’agent actif (Kilo / OpenCode / OpenRouter)">📊 Quota</button>
+    <button id="btnChanges" title="Fichiers modifiés par la session (Ctrl+Alt+G)">± <span id="changesCount">Modifs</span></button>
+    <button id="btnOpen" title="Ouvrir le dossier dans…">↗ Ouvrir</button>
+    <button id="btnAttach" class="icon" title="Joindre une image ou un fichier (ou glisser-déposer / coller dans le terminal)">📎</button>
+    <input type="file" id="fileInput" multiple hidden>
+    <button id="btnSwitch" class="switch-btn" title="Basculer vers le modèle suivant en transmettant le contexte (Ctrl+Alt+S)">🔀 <span id="btnSwitchLabel">Basculer</span></button>
+    <button id="btnRestart" title="Redémarrer la session">Redémarrer</button>
+    <button id="btnMore" class="icon" title="Plus d'actions">⋯</button>
+    <button id="btnKill" hidden>Arrêter</button>
+    <button id="btnClose" class="danger" title="Fermer et retirer de la liste">Fermer</button>
+  </div>
+  <div id="stale" class="stale" hidden>
+    <span id="staleMsg"></span>
+    <button id="btnStale" class="primary">Redémarrer le serveur</button>
+  </div>
+  <div id="updateBar" class="stale ok" hidden>
+    <span id="updateMsg"></span>
+    <button id="btnUpdate" class="primary">Redémarrer pour mettre à jour</button>
+  </div>
+  <div id="work">
+    <div id="terms" data-layout="1"></div>
+    <aside id="panel" hidden>
+      <div class="ptabs">
+        <button data-tab="changes" class="on">Modifications</button>
+        <button data-tab="timeline">Chronologie</button>
+        <button data-tab="usage">Consommation</button>
+        <span class="spacer"></span>
+        <button id="panelClose" class="icon" title="Fermer le panneau">✕</button>
+      </div>
+      <div id="tab-changes" class="ptab"></div>
+      <div id="tab-timeline" class="ptab" hidden></div>
+      <div id="tab-usage" class="ptab" hidden></div>
+    </aside>
+  </div>
+  <div id="park" hidden></div>
+  <div id="toast" class="toast" role="status"></div>
+  <div id="empty">
+    <h1>Free Session Manager</h1>
+    <p>Modèles Gratuits (Kilo, OpenCode, OpenRouter) &amp; Multi-Sessions réunis dans une interface fluide.</p>
+    <p><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>N</kbd> nouvelle session · <kbd>Ctrl</kbd>+<kbd>K</kbd> palette · <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>H</kbd> historique</p>
+    <p><button id="emptyNew" class="primary">+ Nouvelle session</button></p>
+  </div>
+</main>
+
+<dialog id="dlgNew">
+  <form method="dialog" id="formNew">
+    <h2>Nouvelle session</h2>
+    <div class="agent-selector-row">
+      <label class="agent-choice-btn active" data-agent="kilo">
+        <input type="radio" name="agent" value="kilo" checked hidden>
+        <span class="agent-icon">⚡</span> <span>Kilo Free</span>
+      </label>
+      <label class="agent-choice-btn" data-agent="opencode">
+        <input type="radio" name="agent" value="opencode" hidden>
+        <span class="agent-icon">💻</span> <span>OpenCode</span>
+      </label>
+      <label class="agent-choice-btn" data-agent="openrouter">
+        <input type="radio" name="agent" value="openrouter" hidden>
+        <span class="agent-icon">🌐</span> <span>OpenRouter</span>
+      </label>
+    </div>
+    <label id="tplRow" hidden>Modèle de session
+      <select name="template"><option value="">— aucun —</option></select>
+    </label>
+    <label>Dossier de travail
+      <span class="pick">
+        <input name="cwd" list="dirs" required autocomplete="off" spellcheck="false" placeholder="/chemin/du/projet">
+        <button type="button" id="btnBrowse" title="Choisir un dossier">Parcourir…</button>
+      </span>
+      <datalist id="dirs"></datalist>
+    </label>
+    <div class="row">
+      <label>Nom <input name="name" placeholder="(nom du dossier)" autocomplete="off"></label>
+      <label>Groupe <input name="group" list="groups" placeholder="(aucun)" autocomplete="off"></label>
+      <datalist id="groups"></datalist>
+    </div>
+    <div class="row">
+      <label>Modèle
+        <select name="model" id="selModel">
+        </select>
+      </label>
+      <label>Mode
+        <select name="mode" id="selMode">
+        </select>
+      </label>
+      <label id="lblEffort">Effort
+        <select name="effort" id="selEffort">
+        </select>
+      </label>
+    </div>
+    <div class="wtBox" id="wtBox">
+      <label class="check"><input type="checkbox" name="worktree"> <span>Travailler dans un <b>worktree git</b> dédié (nouvelle branche, sans toucher au dépôt principal)</span></label>
+      <label id="wtBranchRow" hidden>Branche <input name="branch" autocomplete="off" spellcheck="false"></label>
+      <p class="hint" id="wtHint"></p>
+    </div>
+    <details>
+      <summary>Options avancées</summary>
+      <label>Premier prompt (envoyé dès que la session est prête) <textarea name="prompt" rows="3" spellcheck="false"></textarea></label>
+      <label id="lblExtra"><span id="lblExtraText">Arguments supplémentaires pour le CLI</span> <input name="extra" placeholder="--add-dir ..." spellcheck="false"></label>
+    </details>
+    <menu>
+      <button type="button" id="btnSaveTpl" class="left">Enregistrer comme modèle</button>
+      <button value="cancel" formnovalidate>Annuler</button>
+      <button value="ok" class="primary">Lancer</button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="dlgRename">
+  <form method="dialog">
+    <h2 id="renTitle">Renommer</h2>
+    <input id="renInput" maxlength="80" autocomplete="off" spellcheck="false">
+    <p class="hint" id="renHint">Le nom est aussi mémorisé pour cette session.</p>
+    <menu>
+      <button value="cancel" formnovalidate>Annuler</button>
+      <button value="ok" class="primary">Valider</button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="dlgCloseWt">
+  <form method="dialog">
+    <h2 id="cwTitle">Fermer la session</h2>
+    <p id="cwInfo"></p>
+    <div class="impChoices">
+      <button value="keep" class="primary choice"><b>Fermer et garder le worktree</b><span>Le dossier et la branche restent : vous pourrez y revenir, fusionner plus tard ou les supprimer.</span></button>
+      <button value="merge" class="choice"><b>Fusionner puis supprimer</b><span>Fusionne la branche dans sa branche de base, puis supprime le worktree. Les modifications doivent être commitées.</span></button>
+      <button value="remove" class="choice danger"><b>Supprimer le worktree et la branche</b><span>Abandonne tout le travail de cette branche.</span></button>
+    </div>
+    <menu><button value="cancel">Annuler</button></menu>
+  </form>
+</dialog>
+
+<dialog id="dlgQueue">
+  <form method="dialog">
+    <h2>File d'attente — <span id="qName"></span></h2>
+    <p class="hint">Chaque prompt est envoyé automatiquement quand la session a fini le précédent.</p>
+    <ol id="qList"></ol>
+    <textarea id="qNew" rows="3" placeholder="Nouveau prompt à mettre en file…" spellcheck="false"></textarea>
+    <menu>
+      <button type="button" id="qAdd" class="left">Ajouter</button>
+      <button value="cancel">Fermer</button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="dlgQuota" class="wide quota-dialog">
+  <div class="histHead">
+    <h2 id="quotaTitle">📊 Quotas &amp; Limites</h2>
+    <span class="spacer"></span>
+    <button type="button" id="btnRefreshQuota" class="icon" title="Actualiser les quotas">⟳</button>
+    <button id="quotaClose" class="icon">✕</button>
+  </div>
+  <div id="quotaContent" class="quota-body">
+    <p class="hint">Chargement des quotas…</p>
+  </div>
+</dialog>
+
+<dialog id="dlgBroadcast">
+  <form method="dialog">
+    <h2>Envoyer à plusieurs sessions</h2>
+    <textarea id="bcText" rows="4" placeholder="Prompt à envoyer…" spellcheck="false" required></textarea>
+    <div id="bcList" class="checklist"></div>
+    <label class="check"><input type="checkbox" id="bcQueue"> <span>Mettre en file d'attente si la session travaille (sinon envoi immédiat)</span></label>
+    <menu>
+      <button value="cancel" formnovalidate>Annuler</button>
+      <button value="ok" class="primary">Envoyer</button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="dlgSearch" class="wide">
+  <div class="histHead">
+    <h2>Rechercher dans les sessions</h2>
+    <input id="srchInput" placeholder="Texte à chercher dans tous les terminaux ouverts…" autocomplete="off">
+    <button id="srchClose" class="icon">✕</button>
+  </div>
+  <ul id="srchList" class="results"></ul>
+</dialog>
+
+<dialog id="dlgPalette" class="palette">
+  <input id="palInput" placeholder="Session, conversation, action…" autocomplete="off" spellcheck="false">
+  <ul id="palList"></ul>
+</dialog>
+
+<dialog id="dlgPrompts" class="wide">
+  <div class="histHead">
+    <h2>Bibliothèque de prompts</h2>
+    <input id="prSearch" placeholder="Filtrer…" autocomplete="off">
+    <button id="prNew">+ Nouveau</button>
+    <button id="prClose" class="icon">✕</button>
+  </div>
+  <ul id="prList" class="results"></ul>
+</dialog>
+
+<dialog id="dlgPromptEdit">
+  <form method="dialog">
+    <h2>Prompt</h2>
+    <label>Titre <input id="peTitle" maxlength="100" required></label>
+    <label>Texte <textarea id="peText" rows="8" spellcheck="false" required></textarea></label>
+    <p class="hint">Variables : <code>{dossier}</code>, <code>{branche}</code>, <code>{nom}</code>, <code>{selection}</code> (texte sélectionné dans le terminal).</p>
+    <label>Étiquettes <input id="peTags" placeholder="revue, tests…"></label>
+    <menu>
+      <button type="button" id="peDelete" class="left danger">Supprimer</button>
+      <button value="cancel" formnovalidate>Annuler</button>
+      <button value="ok" class="primary">Enregistrer</button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="dlgSettings" class="wide settings">
+  <div class="histHead">
+    <h2>Réglages</h2>
+    <span class="spacer"></span>
+    <button id="setClose" class="icon">✕</button>
+  </div>
+  <div class="setBody">
+    <nav class="setNav">
+      <button data-st="general" class="on">Général</button>
+      <button data-st="terminal">Terminal</button>
+      <button data-st="alerts">Notifications</button>
+      <button data-st="security">Sécurité</button>
+      <button data-st="templates">Modèles de session</button>
+      <button data-st="prompts">Prompts</button>
+      <button data-st="diag">Diagnostic</button>
+      <button data-st="logs">Journaux</button>
+      <button data-st="about">À propos &amp; Agents</button>
+    </nav>
+    <div class="setPages">
+      <section data-st="general">
+        <label>Agent par défaut <select data-set="defaultAgent">
+          <option value="kilo" selected>⚡ Kilo Free (Nemotron, Qwen...)</option>
+          <option value="opencode">💻 OpenCode</option>
+          <option value="openrouter">🌐 OpenRouter Free</option>
+        </select></label>
+        <label>Thème <select data-set="theme"><option value="system">Système (suit Windows / macOS)</option><option value="light">Clair</option><option value="dark">Sombre</option></select></label>
+        <label>Langue <select data-set="lang"><option value="auto">Automatique</option><option value="fr">Français</option><option value="en">English</option></select></label>
+        <label class="check"><input type="checkbox" data-set="worktreeDefault"> <span>Proposer un worktree git par défaut dans un dépôt</span></label>
+        <label>Éditeur pour « Ouvrir dans » <select data-set="editor" id="setEditor"><option value="auto">Automatique</option></select></label>
+        <label id="editorCmdRow">Commande personnalisée <input data-set="editorCommand" placeholder="mon-editeur {path}" spellcheck="false"></label>
+        <label class="check"><input type="checkbox" data-set="autoUpdate"> <span>Mises à jour automatiques</span></label>
+        <label class="check"><input type="checkbox" data-set="compactSidebar"> <span>Barre latérale compacte</span></label>
+        <label class="check app-only"><input type="checkbox" data-set="minimizeToTray"> <span>Réduire dans la zone de notification (au lieu de la barre des tâches)</span></label>
+        <label class="check app-only"><input type="checkbox" data-set="closeToTray"> <span>Fermer la fenêtre la garde dans la zone de notification (les sessions continuent)</span></label>
+      </section>
+      <section data-st="terminal" hidden>
+        <label>Taille du texte <input type="number" min="9" max="28" data-set="fontSize"></label>
+        <label>Police <input data-set="fontFamily" placeholder="Cascadia Mono, Menlo…" spellcheck="false"></label>
+        <p class="hint">Raccourcis : <kbd>Ctrl</kbd>+<kbd>+</kbd>/<kbd>−</kbd>/<kbd>0</kbd> pour zoomer.</p>
+      </section>
+      <section data-st="security" hidden>
+        <p class="hint">Verrouiller une session : menu ⋯ ou clic droit › « Verrouiller par mot de passe… » (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>L</kbd>).</p>
+        <label class="check"><input type="checkbox" data-set="lockOnHide"> <span>Reverrouiller les sessions quand la fenêtre est réduite ou masquée</span></label>
+        <label>Reverrouiller après une inactivité de (minutes, 0 = jamais) <input type="number" min="0" max="600" data-set="autoLockMinutes"></label>
+      </section>
+      <section data-st="alerts" hidden>
+        <label class="check"><input type="checkbox" data-set="notifications"> <span>Notifications système</span></label>
+        <label>Son <select data-set="sound"><option value="off">Aucun</option><option value="soft">Discret</option><option value="bell">Clochette</option></select> <button type="button" id="soundTest">▶ Tester</button></label>
+        <label class="check"><input type="checkbox" data-set="dnd"> <span>Ne pas déranger (ni notification ni son)</span></label>
+        <label>Rappel si une session attend depuis (minutes, 0 = jamais) <input type="number" min="0" max="600" data-set="waitingMinutes"></label>
+        <label>Alerte si une session travaille depuis plus de (minutes, 0 = jamais) <input type="number" min="0" max="600" data-set="longRunMinutes"></label>
+      </section>
+      <section data-st="templates" hidden>
+        <p class="hint">Un modèle mémorise agent, dossier, nom, modèle, mode, worktree, groupe et premier prompt. Créer : « Enregistrer comme modèle » dans la fenêtre Nouvelle session.</p>
+        <ul id="tplList" class="results"></ul>
+      </section>
+      <section data-st="prompts" hidden>
+        <p class="hint">Snippets réutilisables, insérés dans la session active depuis la palette (<kbd>Ctrl</kbd>+<kbd>K</kbd>) ou le menu ⋯.</p>
+        <button type="button" id="openPrompts">Ouvrir la bibliothèque de prompts</button>
+      </section>
+      <section data-st="diag" hidden>
+        <pre id="diagOut" class="mono">…</pre>
+        <button type="button" id="diagCopy">Copier le rapport</button>
+        <button type="button" id="diagRefresh">Actualiser</button>
+      </section>
+      <section data-st="logs" hidden>
+        <div class="row"><input id="logFilter" placeholder="Filtrer les journaux…"><button type="button" id="logRefresh">Actualiser</button></div>
+        <pre id="logOut" class="mono logs"></pre>
+      </section>
+      <section data-st="about" hidden>
+        <p><b>Free Session Manager</b> <span id="aboutVersion"></span> — Modèles Gratuits (Kilo, OpenCode &amp; OpenRouter).</p>
+        <p id="updateStatus" class="hint"></p>
+        <hr style="border:none;border-top:1px solid var(--line);margin:16px 0;">
+        <div class="agent-status-card" style="margin-bottom:12px;">
+          <h4>⚡ Kilo CLI</h4>
+          <p id="kiloCliVersion">détection…</p>
+        </div>
+        <div class="agent-status-card" style="margin-bottom:12px;">
+          <h4>💻 OpenCode CLI</h4>
+          <p id="opencodeCliVersion">détection…</p>
+        </div>
+        <div class="agent-status-card">
+          <h4>🌐 OpenRouter API</h4>
+          <p id="openrouterStatus">Clé configurée (sk-or-v1-b6b...)</p>
+        </div>
+      </section>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="dlgWelcome">
+  <form method="dialog">
+    <h2>Bienvenue dans Free Session Manager 👋</h2>
+    <div id="welcomeCheck" class="checks"></div>
+    <ul class="tips">
+      <li>Pilotez des sessions <b>Kilo</b>, <b>OpenCode</b> et <b>OpenRouter</b> avec des modèles 100% gratuits.</li>
+      <li><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>N</kbd> nouvelle session · <kbd>Ctrl</kbd>+<kbd>K</kbd> palette de commandes</li>
+      <li>Fermer la fenêtre ne coupe rien : les sessions continuent et reviennent après un redémarrage.</li>
+      <li>Glissez une session sur un panneau (⊞ en haut) pour en suivre plusieurs côte à côte.</li>
+    </ul>
+    <label>Premier dossier de travail
+      <span class="pick"><input id="welcomeCwd" autocomplete="off" spellcheck="false"><button type="button" id="welcomeBrowse">Parcourir…</button></span>
+    </label>
+    <menu>
+      <button value="cancel">Passer</button>
+      <button value="ok" class="primary">Démarrer</button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="dlgLock">
+  <form method="dialog">
+    <h2 id="lkTitle">Verrouiller</h2>
+    <p class="hint">Le contenu de la session est masqué et sa saisie bloquée tant qu'elle n'est pas déverrouillée. Elle continue de tourner. Attention : le mot de passe ne peut pas être récupéré.</p>
+    <label id="lkCurRow">Mot de passe actuel <input type="password" id="lkCur" autocomplete="current-password"></label>
+    <label id="lkNewRow">Mot de passe <input type="password" id="lkNew" autocomplete="new-password"></label>
+    <label id="lkNew2Row">Confirmer le mot de passe <input type="password" id="lkNew2" autocomplete="new-password"></label>
+    <label id="lkHintRow">Indice (facultatif, visible sur l'écran de verrouillage) <input id="lkHint" maxlength="120" autocomplete="off"></label>
+    <p id="lkErr" class="err"></p>
+    <menu>
+      <button value="cancel" formnovalidate>Annuler</button>
+      <button value="ok" class="primary">Valider</button>
+    </menu>
+  </form>
+</dialog>
+
+<div id="ctx" class="ctx" popover="manual"></div>
+
+<dialog id="dlgHistory" class="wide">
+  <div class="histHead">
+    <h2>Historique</h2>
+    <div class="agent-filter-bar hist-filters" id="histFilterBar">
+      <button class="flt-btn active" data-filter="all">Tous</button>
+      <button class="flt-btn" data-filter="kilo">⚡ Kilo</button>
+      <button class="flt-btn" data-filter="opencode">💻 OpenCode</button>
+      <button class="flt-btn" data-filter="openrouter">🌐 OpenRouter</button>
+    </div>
+    <input id="histSearch" placeholder="Filtrer (titre, dossier, prompt)…" autocomplete="off">
+    <button id="histClose" class="icon">✕</button>
+  </div>
+  <ul id="histList"></ul>
+</dialog>
+
+<script src="i18n.js"></script>
+<script src="xterm.js"></script>
+<script src="addon-fit.js"></script>
+<script src="addon-web-links.js"></script>
+<script src="addon-webgl.js"></script>
+<script src="app.js"></script>
+<script src="panel.js"></script>
+<script src="settings.js"></script>
+<script src="palette.js"></script>
+<script src="lock.js"></script>
+</body>
+</html>
