@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Free Session Manager — Kilo, OpenCode & OpenRouter Free</title>
+<meta name="description" content="Gestionnaire de sessions multi-agents 100% gratuit dédié aux modèles libres et gratuits de Kilo, OpenCode et OpenRouter.">
+<link rel="icon" href="icon.svg">
+<meta property="og:title" content="Free Session Manager">
+<meta property="og:description" content="Orchestrez plusieurs sessions terminal IA sans abonnement ni carte de crédit. Modèles gratuits Kilo, OpenCode et OpenRouter.">
+<meta property="og:image" content="https://khalilbenaz.github.io/free-session-manager/icon.png">
+<meta name="theme-color" content="#0d1117">
+<style>
+:root {
+  --bg: #0d1117;
+  --bg-card: #151a23;
+  --bg-card2: #1b212d;
+  --line: #293241;
+  --fg: #e6edf3;
+  --dim: #8b949e;
+  --kilo: #ffaa00;
+  --kilo-bg: rgba(255, 170, 0, 0.12);
+  --kilo-border: rgba(255, 170, 0, 0.35);
+  --opencode: #00d2b4;
+  --opencode-bg: rgba(0, 210, 180, 0.12);
+  --opencode-border: rgba(0, 210, 180, 0.35);
+  --openrouter: #3b82f6;
+  --openrouter-bg: rgba(59, 130, 246, 0.12);
+  --openrouter-border: rgba(59, 130, 246, 0.35);
+  --ok: #3fb950;
+  --mono: "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f6f8fa;
+    --bg-card: #ffffff;
+    --bg-card2: #f0f3f6;
+    --line: #d0d7de;
+    --fg: #1f2328;
+    --dim: #57606a;
+    --kilo: #d97706;
+    --kilo-bg: rgba(217, 119, 6, 0.1);
+    --kilo-border: rgba(217, 119, 6, 0.3);
+    --opencode: #0d9488;
+    --opencode-bg: rgba(13, 148, 136, 0.1);
+    --opencode-border: rgba(13, 148, 136, 0.3);
+    --openrouter: #2563eb;
+    --openrouter-bg: rgba(37, 99, 235, 0.1);
+    --openrouter-border: rgba(37, 99, 235, 0.3);
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 -apple-system, "Segoe UI", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+a { color: inherit; text-decoration: none; }
+.wrap { max-width: 1140px; margin: 0 auto; padding: 0 24px; }
+code, kbd { font-family: var(--mono); font-size: .88em; background: var(--bg-card2); border: 1px solid var(--line); border-radius: 6px; padding: 2px 7px; }
+
+header { position: sticky; top: 0; z-index: 50; background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
+header .wrap { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+.brand { display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 17px; }
+.brand img { width: 32px; height: 32px; }
+.brand span { background: linear-gradient(135deg, var(--kilo), var(--opencode), var(--openrouter)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+nav { display: flex; align-items: center; gap: 20px; font-size: 14px; font-weight: 500; }
+nav a { color: var(--dim); transition: color .15s; }
+nav a:hover { color: var(--fg); }
+
+.hero { padding: 64px 0 40px; text-align: center; }
+.hero-tag { display: inline-flex; align-items: center; gap: 8px; padding: 5px 14px; border-radius: 30px; font-size: 13px; font-weight: 600; background: var(--bg-card); border: 1px solid var(--line); margin-bottom: 24px; color: var(--dim); }
+.hero h1 { font-size: clamp(34px, 5.5vw, 56px); line-height: 1.15; margin: 0 0 20px; letter-spacing: -.03em; font-weight: 800; }
+.hero h1 span.gradient { background: linear-gradient(135deg, var(--kilo), var(--opencode), var(--openrouter)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.hero p.lead { font-size: clamp(17px, 2.2vw, 20px); color: var(--dim); max-width: 760px; margin: 0 auto 36px; line-height: 1.5; }
+
+.cta-row { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; margin-bottom: 48px; }
+.btn-primary { background: linear-gradient(135deg, var(--kilo), var(--opencode)); color: #fff; font-weight: 700; padding: 12px 24px; border-radius: 10px; display: inline-flex; align-items: center; gap: 8px; transition: transform .15s, opacity .15s; }
+.btn-primary:hover { opacity: .9; transform: translateY(-1px); }
+.btn-secondary { background: var(--bg-card); border: 1px solid var(--line); color: var(--fg); font-weight: 600; padding: 12px 24px; border-radius: 10px; display: inline-flex; align-items: center; gap: 8px; }
+
+.trio-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; margin: 40px 0 60px; }
+.card { border-radius: 16px; padding: 28px; background: var(--bg-card); border: 1px solid var(--line); display: flex; flex-direction: column; }
+.card.is-kilo { border-top: 3px solid var(--kilo); }
+.card.is-opencode { border-top: 3px solid var(--opencode); }
+.card.is-openrouter { border-top: 3px solid var(--openrouter); }
+.card h3 { margin: 0 0 12px; font-size: 20px; display: flex; align-items: center; gap: 10px; }
+.card p { color: var(--dim); margin: 0 0 16px; font-size: 14.5px; }
+.card ul { margin: 0; padding-left: 20px; color: var(--fg); font-size: 13.5px; line-height: 1.8; }
+
+.features-section { padding: 40px 0 60px; }
+.features-section h2 { font-size: 28px; margin-bottom: 24px; text-align: center; }
+.feat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
+.feat-item { background: var(--bg-card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
+.feat-item b { display: block; margin-bottom: 6px; font-size: 16px; }
+.feat-item p { margin: 0; font-size: 14px; color: var(--dim); }
+
+footer { border-top: 1px solid var(--line); padding: 40px 0; text-align: center; color: var(--dim); font-size: 14px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="brand">
+      <img src="icon.svg" alt="Free Session Manager">
+      <span>Free Session Manager</span>
+    </div>
+    <nav>
+      <a href="#models">Modèles</a>
+      <a href="#features">Fonctionnalités</a>
+      <a href="https://github.com/khalilbenaz/free-session-manager" target="_blank">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="hero">
+    <div class="hero-tag">⚡ 100% Gratuit · Zéro Coût d'API · Multi-Agents</div>
+    <h1>Gestionnaire de sessions IA<br><span class="gradient">100% Gratuit & Illimité</span></h1>
+    <p class="lead">Orchestrez facilement plusieurs sessions terminal avec les meilleurs modèles gratuits de Kilo, OpenCode et OpenRouter dans une interface fluide et unifiée.</p>
+    <div class="cta-row">
+      <a href="https://github.com/khalilbenaz/free-session-manager" class="btn-primary" target="_blank">⭐ Voir sur GitHub</a>
+      <a href="#models" class="btn-secondary">Explorer les modèles</a>
+    </div>
+  </section>
+
+  <section id="models" class="trio-grid">
+    <div class="card is-kilo">
+      <h3>⚡ Kilo Free</h3>
+      <p>Modèles puissants exécutés nativement via le CLI Kilo.</p>
+      <ul>
+        <li><code>nvidia/nemotron-3-super-120b-a12b:free</code></li>
+        <li><code>liquid/lfm-2.5-2.6b:free</code></li>
+        <li><code>qwen/qwen3.8-27b:free</code></li>
+        <li><code>google/gemma-4-31b-it</code></li>
+        <li><code>cohere/north-mini-code:free</code></li>
+        <li><code>stepfun/step-3.7-flash:free</code></li>
+      </ul>
+    </div>
+
+    <div class="card is-opencode">
+      <h3>💻 OpenCode</h3>
+      <p>Modèles optimisés pour le code avec exécution autonome.</p>
+      <ul>
+        <li><code>nemotron-3-ultra-free</code></li>
+        <li><code>nemotron-3.5-lightning-free</code></li>
+        <li><code>ling-3.0-flash-fin-free</code></li>
+        <li><code>ling-3.0-flash-sante-free</code></li>
+        <li><code>minimax-m2.5-free</code></li>
+      </ul>
+    </div>
+
+    <div class="card is-openrouter">
+      <h3>🌐 OpenRouter Free</h3>
+      <p>Accès sans frais aux modèles phares via votre clé OpenRouter.</p>
+      <ul>
+        <li><code>openrouter/free</code> (Auto)</li>
+        <li><code>meta-llama/llama-3.3-70b-instruct:free</code></li>
+        <li><code>google/gemini-2.0-flash-exp:free</code></li>
+        <li><code>deepseek/deepseek-r1:free</code></li>
+        <li><code>qwen/qwen-2.5-coder-32b-instruct:free</code></li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="features" class="features-section">
+    <h2>Fonctionnalités avancées</h2>
+    <div class="feat-grid">
+      <div class="feat-item">
+        <b>🔀 Bascule intelligente</b>
+        <p>Passez d'un agent ou modèle à l'autre en conservant l'historique et le résumé du travail effectué.</p>
+      </div>
+      <div class="feat-item">
+        <b>📐 Multi-dispositions</b>
+        <p>1 session, 2 colonnes, 2 lignes ou grille 2×2 pour travailler sur plusieurs tâches en parallèle.</p>
+      </div>
+      <div class="feat-item">
+        <b>🌿 Worktrees Git</b>
+        <p>Isolez chaque session dans sa propre branche git et son dossier de travail sans polluer votre branche principale.</p>
+      </div>
+      <div class="feat-item">
+        <b>🖥️ Application native</b>
+        <p>Application de bureau macOS (Apple Silicon & Intel) avec raccourcis clavier natifs et icône dans la barre des menus.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>Free Session Manager · Développé avec passion pour les développeurs · Licence MIT</p>
+  </div>
+</footer>
+
+</body>
+</html>
