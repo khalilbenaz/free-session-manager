@@ -1,15 +1,25 @@
 'use strict';
 const $ = s => document.querySelector(s);
+window.$ = $;
 const TOKEN = document.querySelector('meta[name="sm-token"]')?.content || document.querySelector('meta[name="asm-token"]')?.content || document.querySelector('meta[name="csm-token"]')?.content || '';
 const IS_MAC = /Mac/i.test(navigator.platform || navigator.userAgent);
+window.IS_MAC = IS_MAC;
+const MOD = IS_MAC ? '⌘' : 'Ctrl';
+window.MOD = MOD;
 const AGENT_LABEL = { kilo: 'Kilo Free', opencode: 'OpenCode', openrouter: 'OpenRouter Free' };
+window.AGENT_LABEL = AGENT_LABEL;
 const getNextAgent = cur => cur === 'kilo' ? 'opencode' : (cur === 'opencode' ? 'openrouter' : 'kilo');
+window.getNextAgent = getNextAgent;
 /** Vrai pour ⌘+Alt sur macOS, Ctrl+Alt ailleurs. */
 const isModAlt = e => (IS_MAC ? e.metaKey : e.ctrlKey) && e.altKey;
+window.isModAlt = isModAlt;
 const LS = { get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { } } };
+window.LS = LS;
 
 const sessions = new Map(); // id -> public view
 const terms = new Map();    // id -> { term, fit, el }
+window.sessions = sessions;
+window.terms = terms;
 let active = LS.get('csm.active', null);
 let ws = null;
 let historyCache = [];
@@ -82,6 +92,7 @@ async function api(method, url, body) {
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText);
   return r.json();
 }
+window.api = api;
 
 // ------------------------------------------------------------------ terminaux
 function ensureTerm(id) {
@@ -563,7 +574,6 @@ $('#curModelBadge').onkeydown = e => {
 // Menu propre à l'application partout : le menu du navigateur n'apparaît jamais.
 // Entrée = [libellé, action, { kbd, danger, disabled }] ; '-' = séparateur.
 // popover : passe au-dessus des boîtes de dialogue modales (top layer).
-const MOD = IS_MAC ? '⌘' : 'Ctrl';
 let lastMenuPos = [100, 100];
 function showMenu(items, x, y) {
   lastMenuPos = [x, y];
@@ -651,6 +661,7 @@ function toast(msg, error) {
   el.textContent = msg; el.className = `toast show${error ? ' error' : ''}`;
   clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.className = 'toast'; }, error ? 5000 : 2500);
 }
+window.toast = toast;
 
 // Déposer un fichier ailleurs que sur un terminal ne doit pas faire quitter la page.
 window.addEventListener('dragover', e => { if (hasFiles(e.dataTransfer)) e.preventDefault(); });
@@ -1192,7 +1203,7 @@ $('#selModel').onchange = e => {
   const currentAgent = $('#formNew').querySelector('input[name="agent"]:checked')?.value || 'kilo';
   syncEffortForAgent(currentAgent, e.target.value);
 };
-$('#formNew').template.onchange = e => applyTemplate(templates.find(x => x.id === e.target.value));
+if ($('#formNew')?.template) $('#formNew').template.onchange = e => applyTemplate(templates.find(x => x.id === e.target.value));
 
 // Worktree : proposé seulement dans un dépôt git ; nom de branche suggéré depuis le nom de la session.
 let repoTimer = null;
@@ -1200,20 +1211,21 @@ function checkRepo() {
   clearTimeout(repoTimer);
   repoTimer = setTimeout(async () => {
     const f = $('#formNew');
-    const cwd = f.cwd.value.trim(); if (!cwd) { $('#wtBox').hidden = true; return; }
+    if (!f) return;
+    const cwd = f.cwd?.value?.trim() || ''; if (!cwd) { if ($('#wtBox')) $('#wtBox').hidden = true; return; }
     try {
-      const r = await api('GET', `/api/git/suggest-branch?cwd=${encodeURIComponent(cwd)}&name=${encodeURIComponent(f.name.value || cwd.split(/[\\/]/).filter(Boolean).pop() || 'session')}`);
-      $('#wtBox').hidden = !r.repo;
-      if (!r.repo) { f.worktree.checked = false; return; }
-      if (!f.branch.dataset.touched) f.branch.value = r.branch;
-      $('#wtHint').textContent = f.worktree.checked ? `${t('Dossier')} : ${r.root}.worktrees/… · ${t('base')} : ${r.base}` : '';
-    } catch { $('#wtBox').hidden = true; }
-    $('#wtBranchRow').hidden = !f.worktree.checked;
+      const r = await api('GET', `/api/git/suggest-branch?cwd=${encodeURIComponent(cwd)}&name=${encodeURIComponent(f.name?.value || cwd.split(/[\\/]/).filter(Boolean).pop() || 'session')}`);
+      if ($('#wtBox')) $('#wtBox').hidden = !r.repo;
+      if (!r.repo) { if (f.worktree) f.worktree.checked = false; return; }
+      if (f.branch && !f.branch.dataset.touched) f.branch.value = r.branch;
+      if ($('#wtHint')) $('#wtHint').textContent = f.worktree?.checked ? `${t('Dossier')} : ${r.root}.worktrees/… · ${t('base')} : ${r.base}` : '';
+    } catch { if ($('#wtBox')) $('#wtBox').hidden = true; }
+    if ($('#wtBranchRow')) $('#wtBranchRow').hidden = !f.worktree?.checked;
   }, 250);
 }
-for (const n of ['cwd', 'name']) $('#formNew')[n].addEventListener('input', checkRepo);
-$('#formNew').worktree.addEventListener('change', checkRepo);
-$('#formNew').branch.addEventListener('input', e => { e.target.dataset.touched = '1'; });
+for (const n of ['cwd', 'name']) $('#formNew')?.[n]?.addEventListener?.('input', checkRepo);
+$('#formNew')?.worktree?.addEventListener?.('change', checkRepo);
+$('#formNew')?.branch?.addEventListener?.('input', e => { e.target.dataset.touched = '1'; });
 $('#btnSaveTpl').onclick = async () => {
   const f = $('#formNew');
   const agent = f.querySelector('input[name="agent"]:checked')?.value || 'kilo';
@@ -1422,7 +1434,7 @@ window.csmNative?.onAction(a => {
 
 window.csmFeatures = window.csmFeatures || {}; // rempli par panel.js, settings.js, palette.js
 publishLocale();
-loadSettings().finally(() => { loadAgyModels(); setupFilters(); connect(); setLayout(layout); window.dispatchEvent(new Event('csm:ready')); document.documentElement.dataset.ready = '1'; }); // réglages et langue définitifs (repère pour les tests)
+loadSettings().finally(() => { setupFilters(); connect(); setLayout(layout); window.dispatchEvent(new Event('csm:ready')); document.documentElement.dataset.ready = '1'; }); // réglages et langue définitifs (repère pour les tests)
 
 const UI_VERSION = document.querySelector('meta[name="sm-version"]')?.content || document.querySelector('meta[name="asm-version"]')?.content || document.querySelector('meta[name="csm-version"]')?.content || '';
 async function checkServerVersion() {
