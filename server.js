@@ -10,7 +10,7 @@ const pty = require('node-pty');
 const { WebSocketServer } = require('ws');
 const {
   ROOT, PORT, IS_WIN, IS_MAC, DATA, LEGACY_DATA,
-  which, resolveKilo, hasKilo, resolveOpencode, hasOpencode, resolveClaude, resolveAgy, hasClaude, hasAgy, stablePath,
+  which, resolveNode, resolveKilo, hasKilo, resolveOpencode, hasOpencode, resolveOpenrouter, hasOpenrouter, resolveClaude, resolveAgy, hasClaude, hasAgy, stablePath,
   CLAUDE_DIR, CLAUDE_HISTORY_FILE, CLAUDE_PROJECTS_DIR,
   BRAIN_DIR, AGY_HISTORY_FILE, GEMINI_CONFIG_DIR
 } = require('./lib/config');
@@ -56,8 +56,10 @@ const HOOK_TOKEN = fs.existsSync(HOOK_TOKEN_FILE)
   ? fs.readFileSync(HOOK_TOKEN_FILE, 'utf8').trim()
   : (() => { const t = crypto.randomBytes(24).toString('hex'); fs.writeFileSync(HOOK_TOKEN_FILE, t); return t; })();
 
+const NODE_BIN = resolveNode();
 const KILO = resolveKilo();
 const OPENCODE = resolveOpencode();
+const OPENROUTER = resolveOpenrouter();
 const CLAUDE = resolveClaude();
 const AGY = resolveAgy();
 
@@ -311,7 +313,7 @@ function spawnSession(s, { resume, fork } = {}) {
   const isOpencode = s.agent === 'opencode';
   const isOpenrouter = s.agent === 'openrouter';
   const isKilo = !isOpencode && !isOpenrouter;
-  const binary = isOpencode ? OPENCODE : KILO;
+  const binary = isOpencode ? OPENCODE : (isOpenrouter ? NODE_BIN : KILO);
 
   let explicitModel = s.model || '';
   let explicitEffort = s.effort || '';
@@ -322,9 +324,12 @@ function spawnSession(s, { resume, fork } = {}) {
   const splitUserArgs = splitArgs(s.args || '');
   for (let i = 0; i < splitUserArgs.length; i++) {
     const a = splitUserArgs[i];
-    if (a === '--model' && i + 1 < splitUserArgs.length) explicitModel = splitUserArgs[++i];
-    else if (a.startsWith('--model=')) explicitModel = a.slice(8);
-    else if (a === '--effort' && i + 1 < splitUserArgs.length) explicitEffort = splitUserArgs[++i];
+    if (a === '--model' && i + 1 < splitUserArgs.length) {
+      const val = splitUserArgs[++i];
+      if (!explicitModel) explicitModel = val;
+    } else if (a.startsWith('--model=')) {
+      if (!explicitModel) explicitModel = a.slice(8);
+    } else if (a === '--effort' && i + 1 < splitUserArgs.length) explicitEffort = splitUserArgs[++i];
     else if (a.startsWith('--effort=')) explicitEffort = a.slice(9);
     else if (a === '--mode' && i + 1 < splitUserArgs.length) explicitMode = splitUserArgs[++i];
     else if (a.startsWith('--mode=')) explicitMode = a.slice(7);
@@ -332,17 +337,17 @@ function spawnSession(s, { resume, fork } = {}) {
     else extraArgs.push(a);
   }
 
+  const defaultModel = agentDefaults(s.agent).model;
+  const effectiveModel = explicitModel || defaultModel;
+  s.model = effectiveModel;
+
   const args = [];
 
   if (isOpencode) {
     const rawArgs = splitArgs(process.env.SM_OPENCODE_ARGS || '');
     args.push(...rawArgs);
     if (resume) args.push('--session', resume);
-    if (explicitModel) {
-      args.push('--model', explicitModel);
-    } else {
-      args.push('--model', 'opencode/nemotron-3-ultra-free');
-    }
+    args.push('--model', effectiveModel);
     if (explicitMode === 'dangerously-skip-permissions') {
       args.push('--auto');
     }
@@ -350,17 +355,13 @@ function spawnSession(s, { resume, fork } = {}) {
       args.push('--prompt', firstPrompt);
     }
   } else if (isOpenrouter) {
-    const rawArgs = splitArgs(process.env.SM_KILO_ARGS || '');
+    // Session OpenRouter 100% Directe (Node.js natif, sans passer par Kilo)
+    args.push(OPENROUTER);
+    const rawArgs = splitArgs(process.env.SM_OPENROUTER_ARGS || '');
     args.push(...rawArgs);
     if (resume) args.push('--session', resume);
-    if (explicitModel) {
-      args.push('--model', explicitModel);
-    } else {
-      args.push('--model', 'kilo/openrouter/free');
-    }
-    if (explicitMode === 'dangerously-skip-permissions') {
-      args.push('--auto');
-    }
+    else if (s.id) args.push('--session', s.id);
+    args.push('--model', effectiveModel);
     if (firstPrompt) {
       args.push('--prompt', firstPrompt);
     }
@@ -369,11 +370,7 @@ function spawnSession(s, { resume, fork } = {}) {
     const rawArgs = splitArgs(process.env.SM_KILO_ARGS || '');
     args.push(...rawArgs);
     if (resume) args.push('--session', resume);
-    if (explicitModel) {
-      args.push('--model', explicitModel);
-    } else {
-      args.push('--model', 'kilo/nvidia/nemotron-3-super-120b-a12b:free');
-    }
+    args.push('--model', effectiveModel);
     if (explicitMode === 'dangerously-skip-permissions') {
       args.push('--auto');
     }
@@ -384,6 +381,7 @@ function spawnSession(s, { resume, fork } = {}) {
 
   args.push(...extraArgs);
 
+  const openrouterKey = process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_API_TOKEN || '';
   const env = {
     ...process.env,
     SM_ID: s.id,
@@ -393,13 +391,17 @@ function spawnSession(s, { resume, fork } = {}) {
     FSM_ID: s.id,
     FSM_PORT: String(PORT),
     FSM_TOKEN: HOOK_TOKEN,
-    OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || '',
+    OPENROUTER_API_KEY: openrouterKey,
+    OPENROUTER_API_TOKEN: openrouterKey,
     COLORTERM: 'truecolor',
   };
 
   // Évite les propagations indésirables d'agents parents
   for (const k of Object.keys(env)) {
     if (/^(CLAUDECODE|CLAUDE_CODE_|CLAUDE_PID$|CLAUDE_EFFORT$|AI_AGENT$|ANTIGRAVITY_AGENT|ELECTRON_RUN_AS_NODE$)/i.test(k)) delete env[k];
+  }
+  if (isOpenrouter && binary === process.execPath && process.versions.electron) {
+    env.ELECTRON_RUN_AS_NODE = '1';
   }
 
   let p;
@@ -483,6 +485,55 @@ function killSession(s) {
 // depuis le transcript (briefing Markdown) puis injecté comme premier prompt de l'agent
 // cible. Si cette session a déjà utilisé l'agent cible, on reprend sa conversation :
 // les deux historiques s'accumulent alors au fil des allers-retours.
+const AGENT_MODELS_MAP = {
+  kilo: [
+    { value: 'kilo/nvidia/nemotron-3-super-120b-a12b:free', label: '⚡ Nemotron 3 Super 120B (Free)' },
+    { value: 'kilo/nvidia/nemotron-3-ultra-550b-a55b:free', label: '⚡ Nemotron 3 Ultra 550B (Free)' },
+    { value: 'kilo/nvidia/nemotron-3.5-lightning:free', label: '⚡ Nemotron 3.5 Lightning (Free)' },
+    { value: 'kilo/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free', label: '⚡ Nemotron 3 Nano Omni (Free)' },
+    { value: 'kilo/kilo-auto/free', label: '⚡ Kilo Auto (Free)' },
+    { value: 'kilo/openrouter/free', label: '⚡ OpenRouter Free via Gateway (Auto)' },
+    { value: 'kilo/liquid/lfm-2.5-2.6b:free', label: '⚡ Liquid LFM 2.5 2.6B (Free)' },
+    { value: 'kilo/qwen/qwen3.8-27b:free', label: '⚡ Qwen 3.8 27B (Free)' },
+    { value: 'kilo/cohere/north-mini-code:free', label: '⚡ Cohere North Mini Code (Free)' },
+    { value: 'kilo/stepfun/step-3.7-flash:free', label: '⚡ StepFun 3.7 Flash (Free)' },
+    { value: 'kilo/dots-studio/dots-3-note-preview:free', label: '⚡ Dots 3 Note Preview (Free)' },
+    { value: 'kilo/poolside/laguna-s-2.1:free', label: '⚡ Poolside Laguna S 2.1 (Free)' },
+    { value: 'kilo/poolside/laguna-xs-2.1:free', label: '⚡ Poolside Laguna XS 2.1 (Free)' },
+    { value: 'kilo/inclusionai/ling-3.0-flash-fin:free', label: '⚡ InclusionAI Ling 3.0 Flash Fin (Free)' },
+    { value: 'kilo/inclusionai/ling-3.0-flash-sante:free', label: '⚡ InclusionAI Ling 3.0 Flash Santé (Free)' },
+    { value: 'kilo/thinkingmachines/inkling-small:free', label: '⚡ Thinking Machines Inkling Small (Free)' },
+  ],
+  opencode: [
+    { value: 'opencode/nemotron-3-ultra-free', label: '💻 Nemotron 3 Ultra (Free)' },
+    { value: 'opencode/nemotron-3.5-lightning-free', label: '💻 Nemotron 3.5 Lightning (Free)' },
+    { value: 'opencode/ling-3.0-flash-fin-free', label: '💻 Ling 3.0 Flash Fin (Free)' },
+    { value: 'opencode/longcat-2.5-preview-free', label: '💻 Longcat 2.5 Preview (Free)' },
+    { value: 'opencode/mimo-v2.6-flash-free', label: '💻 Mimo v2.6 Flash (Free)' },
+    { value: 'opencode/muse-spark-1.3-contributor-free', label: '💻 Muse Spark 1.3 Contributor (Free)' },
+    { value: 'opencode/space-bunny-free', label: '💻 Space Bunny (Free)' },
+    { value: 'opencode/big-pickle', label: '💻 Big Pickle (Free)' },
+  ],
+  openrouter: [
+    { value: 'openrouter/openrouter/free', label: '🌐 OpenRouter Free (Auto)' },
+    { value: 'openrouter/nvidia/nemotron-3-super-120b-a12b:free', label: '🌐 Nemotron 3 Super 120B (Free)' },
+    { value: 'openrouter/nvidia/nemotron-3-ultra-550b-a55b:free', label: '🌐 Nemotron 3 Ultra 550B (Free)' },
+    { value: 'openrouter/nvidia/nemotron-3.5-lightning:free', label: '🌐 Nemotron 3.5 Lightning (Free)' },
+    { value: 'openrouter/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free', label: '🌐 Nemotron 3 Nano Omni (Free)' },
+    { value: 'openrouter/liquid/lfm-2.5-2.6b:free', label: '🌐 Liquid LFM 2.5 2.6B (Free)' },
+    { value: 'openrouter/qwen/qwen3.8-27b:free', label: '🌐 Qwen 3.8 27B (Free)' },
+    { value: 'openrouter/google/gemma-4-31b-it:free', label: '🌐 Google Gemma 4 31B (Free)' },
+    { value: 'openrouter/google/gemma-4-26b-a4b-it:free', label: '🌐 Google Gemma 4 26B (Free)' },
+    { value: 'openrouter/cohere/north-mini-code:free', label: '🌐 Cohere North Mini Code (Free)' },
+    { value: 'openrouter/poolside/laguna-s-2.1:free', label: '🌐 Poolside Laguna S 2.1 (Free)' },
+    { value: 'openrouter/poolside/laguna-xs-2.1:free', label: '🌐 Poolside Laguna XS 2.1 (Free)' },
+    { value: 'openrouter/inclusionai/ling-3.0-flash-fin:free', label: '🌐 InclusionAI Ling 3.0 Flash Fin (Free)' },
+    { value: 'openrouter/inclusionai/ling-3.0-flash-sante:free', label: '🌐 InclusionAI Ling 3.0 Flash Santé (Free)' },
+    { value: 'openrouter/thinkingmachines/inkling-small:free', label: '🌐 Thinking Machines Inkling Small (Free)' },
+    { value: 'openrouter/dots-studio/dots-3-note-preview:free', label: '🌐 Dots 3 Note Preview (Free)' },
+  ],
+};
+
 function agentDefaults(agent) {
   if (agent === 'opencode') {
     return {
@@ -493,7 +544,7 @@ function agentDefaults(agent) {
   }
   if (agent === 'openrouter') {
     return {
-      model: 'kilo/openrouter/free',
+      model: 'openrouter/openrouter/free',
       effort: '',
       mode: '',
     };
@@ -511,6 +562,35 @@ function fitModel(agent, model) {
 
 function switchAgent(s, to, override = {}) {
   const from = s.agent || 'kilo';
+
+  // 1. Sauvegarde et transmission du contexte (Handoff Briefing)
+  let brief = null;
+  let stats = null;
+  let file = handoff.transcriptFile(from, s.conversationId || s.claudeSessionId || s.id);
+  if (!file && s.buf && s.buf.length > 50) {
+    try {
+      const transDir = path.join(DATA, 'transcripts');
+      fs.mkdirSync(transDir, { recursive: true });
+      const f = path.join(transDir, `${s.id}.jsonl`);
+      const cleanBuf = s.buf.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').trim();
+      if (cleanBuf.length > 20) {
+        fs.writeFileSync(f, JSON.stringify({ role: 'user', content: cleanBuf.slice(0, 10000), timestamp: new Date().toISOString() }) + '\n');
+        file = f;
+      }
+    } catch (e) {}
+  }
+
+  if (file) {
+    const built = handoff.buildBriefing({
+      file, from, to, sessionName: s.name, cwd: s.cwd,
+    });
+    if (built && built.markdown) {
+      brief = built.markdown;
+      stats = built.stats;
+      s.initialPrompt = brief;
+    }
+  }
+
   killSession(s);
   s.pty = null;
 
@@ -528,12 +608,12 @@ function switchAgent(s, to, override = {}) {
   s.buf = '';
   broadcast({ t: 'clear', id: s.id });
   const AGENT_NAMES = { kilo: 'Kilo Free', opencode: 'OpenCode', openrouter: 'OpenRouter Free' };
-  s.buf += `\x1b[90m[fsm] Bascule vers ${AGENT_NAMES[to] || to} · Modèle: ${s.model}\x1b[0m\r\n`;
+  s.buf += `\x1b[90m[fsm] Bascule vers ${AGENT_NAMES[to] || to} · Modèle: ${s.model}${brief ? ' · Contexte partagé transmis' : ''}\x1b[0m\r\n`;
   spawnSession(s);
   s.switches = [...(s.switches || []), { from, to, at: Date.now() }].slice(-20);
   persist();
   broadcast({ t: 'session', s: publicView(s) });
-  return { session: s, stats: null };
+  return { session: s, brief, stats };
 }
 
 let shuttingDown = false;
@@ -936,6 +1016,11 @@ const server = http.createServer(async (req, res) => {
       persist(); broadcastAll();
       return json(res, 200, {});
     }
+    const agMatch = p.match(/^\/api\/agents\/(\w+)\/models$/);
+    if (agMatch && req.method === 'GET') {
+      const ag = agMatch[1];
+      return json(res, 200, { agent: ag, models: AGENT_MODELS_MAP[ag] || [] });
+    }
     const m = p.match(/^\/api\/sessions\/(\w+)(?:\/(\w+))?$/);
     const s = m && sessions.get(m[1]);
     if (m && !s) return json(res, 404, { error: 'session inconnue' });
@@ -953,6 +1038,12 @@ const server = http.createServer(async (req, res) => {
       const body = await readBody(req);
       const newModel = fitModel(s.agent, body && body.model);
       s.model = newModel;
+      const remainingArgs = splitArgs(s.args || '').filter((a, i, arr) => {
+        if (a === '--model' || (i > 0 && arr[i - 1] === '--model')) return false;
+        if (a.startsWith('--model=')) return false;
+        return true;
+      });
+      s.args = [newModel ? `--model ${newModel}` : '', ...remainingArgs].filter(Boolean).join(' ');
       s.agentCfg = { ...(s.agentCfg || {}), [s.agent]: { ...(s.agentCfg?.[s.agent] || {}), model: newModel } };
       persist();
       broadcast({ t: 'session', s: publicView(s) });

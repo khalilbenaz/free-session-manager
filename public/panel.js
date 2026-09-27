@@ -57,7 +57,44 @@
     const st = gitState;
     if (!st) { el.innerHTML = `<p class="hint">${t('Chargement…')}</p>`; return; }
     if (st.error) { el.innerHTML = `<p class="err">${esc(st.error)}</p>`; return; }
-    if (!st.repo) { el.innerHTML = `<p class="hint">${t('Le dossier de cette session n’est pas un dépôt git.')}</p>`; return; }
+    if (!st.repo) {
+      const files = st.files || [];
+      el.innerHTML = `
+        <div class="gitHead">
+          <span class="branch">📁 ${esc((st.cwd || '').split('/').pop() || t('Dossier'))}</span>
+          <span class="spacer"></span>
+          <button class="icon" data-act="refresh" title="${t('Actualiser')}">⟳</button>
+        </div>
+        <div style="padding:10px 12px;margin:8px 0;background:var(--panel2,#24283b);border-radius:6px;border:1px solid var(--line,#3b4261);font-size:12px;">
+          <p style="margin:0 0 8px 0;color:var(--dim,#a9b1d6);">${t('Ce dossier n’est pas un dépôt Git.')}</p>
+          <button type="button" class="primary" id="btnGitInit" style="width:100%;font-size:12px;padding:6px 10px;cursor:pointer;">⚡ ${t('Initialiser Git dans ce dossier')}</button>
+        </div>
+        ${files.length ? `
+          <div style="font-size:11px;font-weight:600;margin:8px 4px 4px;color:var(--dim,#7aa2f7);">${t('Fichiers récents')} (${files.length}) :</div>
+          <ul class="files">${files.map((f, i) => `
+            <li data-i="${i}">
+              <span class="fst st-new">F</span>
+              <span class="fp" title="${esc(f.path)}">${esc(f.path)}</span>
+            </li>`).join('')}</ul>
+        ` : `<p class="hint">${t('Aucun fichier dans ce dossier.')}</p>`}
+      `;
+      el.querySelector('[data-act=refresh]').onclick = () => loadChanges();
+      const btnInit = el.querySelector('#btnGitInit');
+      if (btnInit) {
+        btnInit.onclick = async () => {
+          btnInit.disabled = true;
+          try {
+            await api('POST', `/api/sessions/${active}/git/init`);
+            toast(t('Dépôt Git initialisé !'));
+            loadChanges();
+          } catch (e) {
+            toast(e.message, true);
+            btnInit.disabled = false;
+          }
+        };
+      }
+      return;
+    }
     const s = sessions.get(active);
     const files = st.files;
     el.innerHTML = `
@@ -141,18 +178,30 @@
   }
 
   // ---------------------------------------------------------------- Chronologie
-  const ICON = { Read: '📖', Edit: '✏️', MultiEdit: '✏️', Write: '📝', Bash: '▶', Grep: '🔎', Glob: '🗂', WebFetch: '🌐', WebSearch: '🌐', Task: '🤖', Agent: '🤖', TodoWrite: '☑', NotebookEdit: '📓' };
+  const ICON = {
+    Read: '📖', Edit: '✏️', MultiEdit: '✏️', Write: '📝', Bash: '▶', Grep: '🔎', Glob: '🗂',
+    WebFetch: '🌐', WebSearch: '🌐', Task: '🤖', Agent: '🤖', TodoWrite: '☑', NotebookEdit: '📓',
+    Question: '💬', 'Réponse IA': '🤖', user_prompt: '💬', assistant_response: '🤖'
+  };
   async function loadTimeline() {
     const el = $('#tab-timeline');
     let list = [];
     try { list = await api('GET', `/api/sessions/${active}/timeline`); } catch (e) { el.innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
     if (!list.length) { el.innerHTML = `<p class="hint">${t('Aucune action pour l’instant.')}</p>`; return; }
     const s = sessions.get(active);
-    el.innerHTML = `<ul class="timeline">${list.slice().reverse().map(x => `
+    el.innerHTML = `
+      <div class="gitHead" style="margin-bottom:8px">
+        <span class="branch">⏳ ${t('Événements')} (${list.length})</span>
+        <span class="spacer"></span>
+        <button class="icon" id="btnRefreshTimeline" title="${t('Actualiser')}">⟳</button>
+      </div>
+      <ul class="timeline">${list.slice().reverse().map(x => `
       <li title="${esc(x.target)}"><span class="ti">${ICON[x.name] || '•'}</span>
         <span class="tn">${esc(x.name)}</span>
         <span class="tt">${esc(x.target.replace(s?.cwd || '\u0000', '.'))}</span>
         <span class="tw">${x.ts ? new Date(x.ts).toLocaleTimeString((F.locale ? F.locale() : 'fr-FR'), { hour: '2-digit', minute: '2-digit' }) : ''}</span></li>`).join('')}</ul>`;
+    const refBtn = el.querySelector('#btnRefreshTimeline');
+    if (refBtn) refBtn.onclick = () => loadTimeline();
   }
 
   function fmtRemainingTime(targetTs) {
@@ -171,7 +220,7 @@
 
   function renderQuotaCards(quotas, updatedAt) {
     if (!quotas || !quotas.length) {
-      return `<p class="hint">${t('Aucune donnée de quota Antigravity disponible pour le moment.')}</p>`;
+      return `<p class="hint">${t('Aucune donnée de quota disponible pour le moment.')}</p>`;
     }
     return `
       <div class="quota-grid">
@@ -179,8 +228,8 @@
           const rem = q.remainingPercent != null ? q.remainingPercent : 0;
           const used = q.usedPercent != null ? q.usedPercent : (100 - rem);
           const colorClass = rem > 50 ? 'quota-good' : (rem >= 20 ? 'quota-warn' : 'quota-crit');
-          const resetDateStr = q.resetTime ? new Date(q.resetTime).toLocaleString((F.locale ? F.locale() : 'fr-FR'), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : (q.resetIso || '');
-          const resetRel = q.resetTime ? fmtRemainingTime(q.resetTime) : '';
+          const resetDateStr = q.resetTime ? new Date(q.resetTime).toLocaleString((F.locale ? F.locale() : 'fr-FR'), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : (q.resetText || q.resetIso || '');
+          const resetRel = q.resetTime ? fmtRemainingTime(q.resetTime) : (q.resetText || '');
           return `
             <div class="quota-card ${colorClass}">
               <div class="quota-card-head">
@@ -202,7 +251,7 @@
                   <span class="quota-val-used">${used}%</span>
                 </div>
                 <div class="quota-stat reset">
-                  <span class="quota-label">${t('Réinitialisation')}</span>
+                  <span class="quota-label">${t('Statut / Reset')}</span>
                   <span class="quota-val-reset" title="${esc(resetDateStr)}">${resetRel ? `<b>${resetRel}</b>` : ''} <small>(${esc(resetDateStr)})</small></span>
                 </div>
               </div>
@@ -224,49 +273,72 @@
     try {
       const [mine, all] = await Promise.all([active ? api('GET', `/api/sessions/${active}/usage`) : null, api('GET', '/api/usage')]);
       const row = (label, u) => `<tr><td>${label}</td><td>${fmtN(u.in + u.cr + u.cw)}</td><td>${fmtN(u.out)}</td><td>${fmt$(u.cost)}</td></tr>`;
-      const days = Object.entries(all.perDay).sort();
+      const days = Object.entries(all.perDay || {}).sort();
       const max = Math.max(1, ...days.map(([, v]) => v));
 
-      const isClaude = sessions.get(active)?.agent === 'claude';
-      const activeAgent = isClaude ? 'claude' : 'agy';
-      const activeData = isClaude ? all.claudeQuota : all.agyQuota;
+      const sess = sessions.get(active);
+      const activeAgent = sess?.agent || 'openrouter';
 
-      const renderAgentBox = (agent, qData) => {
-        const isAgy = agent === 'agy';
-        const title = isAgy ? `🔷 ${t('Quotas Antigravity (agy)')}` : `🧡 ${t('Quotas Claude Code')}`;
-        const refId = isAgy ? 'btnRefreshTabAgyQuota' : 'btnRefreshTabClaudeQuota';
-        const hasCards = qData?.quotas?.length > 0;
-        const bodyHtml = hasCards
-          ? renderQuotaCards(qData.quotas, qData.updatedAt)
-          : `<p class="hint">${esc(qData?.error || (isAgy ? t('Aucune donnée de quota Antigravity disponible pour le moment.') : t('Aucune donnée de quota Claude Code disponible pour le moment.')))}</p>`;
-        return `
-          <div class="usage-agy-quota-box" data-quota-agent="${agent}">
-            <div class="usage-head-row">
-              <h3>${title}</h3>
-              <button type="button" class="mini-btn" id="${refId}" title="${t('Actualiser')}">⟳</button>
-            </div>
-            ${bodyHtml}
-          </div>
-        `;
+      const agentConfigs = {
+        openrouter: {
+          title: `🌐 ${t('Quotas OpenRouter (API Directe)')}`,
+          data: all.openrouterQuota,
+          emptyMsg: t('Aucune donnée de quota OpenRouter.')
+        },
+        kilo: {
+          title: `⚡ ${t('Quotas Kilo (Free Models)')}`,
+          data: all.kiloQuota,
+          emptyMsg: t('Aucune donnée de quota Kilo.')
+        },
+        opencode: {
+          title: `💻 ${t('Quotas OpenCode (Free)')}`,
+          data: all.opencodeQuota,
+          emptyMsg: t('Aucune donnée de quota OpenCode.')
+        },
+        claude: {
+          title: `🧡 ${t('Quotas Claude Code')}`,
+          data: all.claudeQuota,
+          emptyMsg: t('Aucune donnée de quota Claude Code disponible pour le moment.')
+        },
+        agy: {
+          title: `🔷 ${t('Quotas Antigravity (agy)')}`,
+          data: all.agyQuota,
+          emptyMsg: t('Aucune donnée de quota Antigravity disponible pour le moment.')
+        }
       };
 
-      const quotaBoxHtml = renderAgentBox(activeAgent, activeData);
+      const cfg = agentConfigs[activeAgent] || agentConfigs.openrouter;
+      const qData = cfg.data;
+      const hasCards = qData?.quotas?.length > 0;
+      const bodyHtml = hasCards
+        ? renderQuotaCards(qData.quotas, qData.updatedAt)
+        : `<p class="hint">${esc(qData?.error || cfg.emptyMsg)}</p>`;
+
+      const quotaBoxHtml = `
+        <div class="usage-agy-quota-box" data-quota-agent="${activeAgent}">
+          <div class="usage-head-row">
+            <h3>${cfg.title}</h3>
+            <button type="button" class="mini-btn" id="btnRefreshTabQuota" title="${t('Actualiser')}">⟳</button>
+          </div>
+          ${bodyHtml}
+        </div>
+      `;
 
       el.innerHTML = `
         ${quotaBoxHtml}
         <h3>${t('Cette session')}</h3>
         ${mine ? `<table class="usage"><tr><th></th><th>${t('Entrée')}</th><th>${t('Sortie')}</th><th>${t('Coût estimé')}</th></tr>
-          ${row(t('Total'), mine.total)}
-          ${Object.entries(mine.models).map(([m, u]) => row(`<small>${esc(m)}</small>`, u)).join('')}</table>` : ''}
+          ${row(t('Total'), mine.total || { in: 0, out: 0, cr: 0, cw: 0, cost: 0 })}
+          ${Object.entries(mine.models || {}).map(([m, u]) => row(`<small>${esc(m)}</small>`, u)).join('')}</table>` : ''}
         <h3>${t('Toutes les sessions')}</h3>
         <table class="usage"><tr><th></th><th>${t('Entrée')}</th><th>${t('Sortie')}</th><th>${t('Coût estimé')}</th></tr>
-          ${row(t('5 dernières heures'), all.h5)}${row(t('Aujourd’hui'), all.today)}${row(t('7 derniers jours'), all.d7)}</table>
+          ${row(t('5 dernières heures'), all.h5 || { in: 0, out: 0, cr: 0, cw: 0, cost: 0 })}${row(t('Aujourd’hui'), all.today || { in: 0, out: 0, cr: 0, cw: 0, cost: 0 })}${row(t('7 derniers jours'), all.d7 || { in: 0, out: 0, cr: 0, cw: 0, cost: 0 })}</table>
         <div class="bars">${days.map(([d, v]) => `<div class="bar" title="${d} : ${fmtN(v)} tokens"><i style="height:${Math.round(v / max * 100)}%"></i><span>${d.slice(8)}</span></div>`).join('')}</div>
         <h3>${t('Sessions les plus coûteuses (7 jours)')}</h3>
-        <ul class="topUse">${all.top.map(x => `<li><span>${esc(x.name)}</span><b>${fmt$(x.cost)}</b></li>`).join('')}</ul>
-        <p class="hint">${t('Coût estimé aux tarifs API publics, à titre indicatif (inclus dans un abonnement Claude). Entrée = tokens lus, cache compris.')}</p>`;
+        <ul class="topUse">${(all.top || []).map(x => `<li><span>${esc(x.name)}</span><b>${fmt$(x.cost)}</b></li>`).join('')}</ul>
+        <p class="hint">${esc(all.note || t('Coût estimé aux tarifs API publics, à titre indicatif.'))}</p>`;
 
-      const refBtn = $(`#btnRefreshTab${activeAgent === 'agy' ? 'Agy' : 'Claude'}Quota`);
+      const refBtn = $('#btnRefreshTabQuota');
       if (refBtn) {
         refBtn.onclick = async () => {
           refBtn.disabled = true;
