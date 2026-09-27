@@ -253,6 +253,28 @@ function handleTerminalQueries(s, p, data) {
   if (data.includes('\x1b[c')) {
     try { p.write('\x1b[?62;1;2;4;6;7;8;9;15;18;21;22c'); } catch { }
   }
+  // Kitty keyboard protocol query (\x1b[?u)
+  if (data.includes('\x1b[?u')) {
+    try { p.write('\x1b[?0u'); } catch { }
+  }
+  // XTVERSION query (\x1b[>0q or \x1b[>q)
+  if (data.includes('\x1b[>0q') || data.includes('\x1b[>q')) {
+    try { p.write('\x1bP>|xterm(388)\x1b\\'); } catch { }
+  }
+  // DECRQSS query (\x1bP+q...\x1b\\)
+  if (data.includes('\x1bP+q')) {
+    try { p.write('\x1bP0$r\x1b\\'); } catch { }
+  }
+  // DECRQM queries (\x1b[?...$p)
+  const decrqm = data.match(/\x1b\[\?(\d+)\$p/g);
+  if (decrqm) {
+    try {
+      for (const m of decrqm) {
+        const mode = m.match(/\d+/)[0];
+        p.write(`\x1b[?${mode};2$y`);
+      }
+    } catch { }
+  }
   // Window size in pixels (\x1b[14t)
   if (data.includes('\x1b[14t')) {
     const cols = s.cols || 120;

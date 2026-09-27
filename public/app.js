@@ -98,6 +98,7 @@ function ensureTerm(id) {
   term.loadAddon(fit);
   term.loadAddon(new WebLinksAddon.WebLinksAddon((e, uri) => window.open(uri, '_blank')));
   term.open(el);
+  el.addEventListener('pointerdown', () => term.focus());
   el.addEventListener('click', () => term.focus());
   term.onData(d => send({ t: 'input', id, d }));
   // clic / focus dans un panneau de la vue partagée : ce panneau devient le panneau actif
@@ -217,7 +218,11 @@ function makePane() {
   p.innerHTML = '<div class="phead"><span class="dot"></span><span class="pn"></span><span class="pb"></span><button class="pclose">✕</button></div><div class="pslot"></div>';
   p.querySelector('.pclose').title = t('Vider ce panneau');
   const idx = () => paneEls().indexOf(p);
-  p.addEventListener('mousedown', () => { const k = idx(); if (k !== focusedPane) { focusedPane = k; if (panes[k]) select(panes[k]); else renderPaneFrames(); } });
+  p.addEventListener('mousedown', () => {
+    const k = idx();
+    if (k !== focusedPane) { focusedPane = k; if (panes[k]) select(panes[k]); else renderPaneFrames(); }
+    else if (panes[k] && terms.has(panes[k])) { terms.get(panes[k]).term.focus(); }
+  });
   p.querySelector('.pclose').onclick = e => { e.stopPropagation(); panes[idx()] = null; renderPanes(); };
   p.addEventListener('dragover', e => { if (e.dataTransfer.types.includes('text/csm-session')) { e.preventDefault(); p.classList.add('dragover'); } });
   p.addEventListener('dragleave', () => p.classList.remove('dragover'));
@@ -511,6 +516,7 @@ function select(id) {
   renderPanes();
   render();
   requestAnimationFrame(() => terms.get(id)?.term.focus());
+  setTimeout(() => terms.get(id)?.term.focus(), 80);
   const s = sessions.get(id);
   if (s && !window.csmFeatures.isLockedHere?.(id) && s.status === 'idle' && s.message === 'terminé') api('POST', `/api/sessions/${id}/seen`).catch(() => { });
 }
@@ -1123,7 +1129,7 @@ function syncEffortForAgent(agent, modelVal) {
   if (!effortSelect) return;
   effortSelect.innerHTML = `<option value="">${t('Non applicable (Modèle Gratuit)')}</option>`;
   effortSelect.disabled = true;
-  if (effortRow) effortRow.style.opacity = '0.5';
+  if (effortRow) effortRow.hidden = true;
 }
 
 function syncEffortOptions(modelVal, effortSelect, effortRow) {

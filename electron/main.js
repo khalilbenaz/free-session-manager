@@ -130,7 +130,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true, sandbox: true,
       nodeIntegration: false, webSecurity: true, allowRunningInsecureContent: false,
-      devTools: !app.isPackaged,
+      devTools: true,
     },
   };
   if (st.x !== undefined && st.y !== undefined) {
@@ -406,7 +406,13 @@ function buildAppMenu() {
       { role: 'cut', label: L('Couper', 'Cut') }, { role: 'copy', label: L('Copier', 'Copy') }, { role: 'paste', label: L('Coller', 'Paste') },
       { role: 'pasteAndMatchStyle', label: L('Coller et adapter le style', 'Paste and Match Style') }, { role: 'delete', label: L('Supprimer', 'Delete') },
       { role: 'selectAll', label: L('Tout sélectionner', 'Select All') }] },
-    { label: L('Présentation', 'View'), submenu: [{ role: 'reload', label: L('Recharger', 'Reload') }, { role: 'togglefullscreen', label: L('Plein écran', 'Toggle Full Screen') }] },
+    { label: L('Présentation', 'View'), submenu: [
+      { role: 'reload', label: L('Recharger', 'Reload') },
+      { role: 'forceReload', label: L('Forcer le rechargement', 'Force Reload') },
+      { role: 'toggleDevTools', label: L('Outils de développement', 'Toggle Developer Tools'), accelerator: 'Cmd+Alt+I' },
+      { type: 'separator' },
+      { role: 'togglefullscreen', label: L('Plein écran', 'Toggle Full Screen') }
+    ] },
     { label: L('Fenêtre', 'Window'), role: 'window', submenu: [
       { role: 'minimize', label: L('Réduire', 'Minimize') }, { role: 'zoom', label: L('Zoom', 'Zoom') }, { type: 'separator' },
       { role: 'front', label: L('Tout ramener au premier plan', 'Bring All to Front') }] },
