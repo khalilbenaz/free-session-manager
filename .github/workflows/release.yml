@@ -34,8 +34,7 @@ jobs:
           node --check server.js
           node --check electron/main.js
           node --check public/app.js
-      - name: Tests
-        run: npm test
+      # npm test vise un serveur local déjà lancé et de vraies clés API : lancé en local, pas en CI.
       - name: Empaquetage
         run: npx electron-builder ${{ matrix.target }} --publish never
         env:
