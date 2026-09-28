@@ -1,6 +1,6 @@
 {
   "name": "free-session-manager",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "description": "Application de bureau et gestionnaire de sessions multi-agents 100% gratuit dédié aux modèles de Kilo, OpenCode et OpenRouter.",
   "repository": "https://github.com/khalilbenaz/free-session-manager",
   "bin": {
@@ -25,7 +25,9 @@
     "start": "node server.js",
     "app": "electron .",
     "dist:mac": "electron-builder --mac --arm64",
-    "install:app": "npm run dist:mac && rm -rf \"/Applications/Free Session Manager.app\" && cp -R \"dist.noindex/mac-arm64/Free Session Manager.app\" /Applications/"
+    "install:app": "npm run dist:mac && rm -rf \"/Applications/Free Session Manager.app\" && cp -R \"dist.noindex/mac-arm64/Free Session Manager.app\" /Applications/",
+    "dist:win": "electron-builder --win --x64",
+    "dist:linux": "electron-builder --linux --x64"
   },
   "engines": {
     "node": ">=18"
@@ -102,6 +104,51 @@
     },
     "dmg": {
       "title": "Free Session Manager ${version}"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "artifactName": "Free-Session-Manager-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "runAfterFinish": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Free Session Manager",
+      "deleteAppDataOnUninstall": false
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "maintainer": "Khalil Benazzouz <khalilbenaz@users.noreply.github.com>",
+      "icon": "build/icon.png",
+      "category": "Development",
+      "artifactName": "Free-Session-Manager-${version}-${arch}.${ext}"
+    },
+    "deb": {
+      "synopsis": "Free Session Manager — sessions Kilo, OpenCode et OpenRouter",
+      "description": "Une fenêtre pour piloter plusieurs sessions d’agents IA gratuits (Kilo, OpenCode, OpenRouter) en parallèle."
     }
   }
 }
