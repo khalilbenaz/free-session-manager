@@ -4,3 +4,5 @@ release/
 .env
 .DS_Store
 .metadata_never_index
+.autopilot/
+.worktrees/
