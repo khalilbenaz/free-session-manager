@@ -25,7 +25,7 @@
     "start": "node server.js",
     "app": "electron .",
     "dist:mac": "electron-builder --mac --arm64",
-    "install:app": "npm run dist:mac && rm -rf \"/Applications/Free Session Manager.app\" && cp -R \"dist/mac-arm64/Free Session Manager.app\" /Applications/"
+    "install:app": "npm run dist:mac && rm -rf \"/Applications/Free Session Manager.app\" && cp -R \"dist.noindex/mac-arm64/Free Session Manager.app\" /Applications/"
   },
   "engines": {
     "node": ">=18"
@@ -69,7 +69,7 @@
     "asar": false,
     "npmRebuild": false,
     "directories": {
-      "output": "dist",
+      "output": "dist.noindex",
       "buildResources": "build"
     },
     "files": [
