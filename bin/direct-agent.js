@@ -62,11 +62,14 @@ const SM_TOKEN = process.env.SM_TOKEN || process.env.FSM_TOKEN || '';
 // -----------------------------------------------------------------------------
 // Notification des statuts à Free Session Manager (Hooks)
 // -----------------------------------------------------------------------------
+// Identifiant de la session gérée (SM_ID) : distinct de --session quand on reprend
+// une conversation existante, dont le transcript porte un autre identifiant.
+const hookId = process.env.SM_ID || process.env.FSM_ID || sessionId;
 function notifyHook(event, message = '') {
-  if (!SM_PORT || !sessionId) return;
+  if (!SM_PORT || !hookId) return;
   try {
     const body = JSON.stringify({
-      id: sessionId,
+      id: hookId,
       agent: providerArg, // toujours le fournisseur demandé sur la CLI, même en cas de repli
       event,
       data: { message }

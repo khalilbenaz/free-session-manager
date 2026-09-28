@@ -64,6 +64,22 @@ Basé sur l'expérience complète de Sessions Manager (multi-terminaux xterm, sp
 
 ---
 
+## 🔌 Exécution native (aucune CLI requise)
+
+Depuis la v1.1.0, les trois fournisseurs tournent via un **runner natif** (`bin/direct-agent.js`) qui appelle directement les API — plus besoin d'installer `kilo` ou `opencode` en CLI.
+
+| Fournisseur | Accès | Clé |
+|---|---|---|
+| **Kilo** | Kilo Gateway (`api.kilo.ai`), anonyme pour les modèles gratuits | `KILO_API_KEY` optionnelle |
+| **OpenCode** | `OPENCODE_API_KEY` → Zen direct ; sinon moteur officiel `opencode serve` (headless, lancé et arrêté automatiquement) si le binaire est présent ; sinon repli sur Kilo | `OPENCODE_API_KEY` optionnelle |
+| **OpenRouter** | API OpenRouter | `OPENROUTER_API_KEY` requise |
+
+Les clés se définissent dans les variables d'environnement ou dans le fichier `.env` du projet.
+
+CLI : `fsm` (ouvre l'app, démarre le serveur si besoin), `fsm stop | restart | status | log`.
+
+---
+
 ## 🚀 Installation & Lancement
 
 ```bash
