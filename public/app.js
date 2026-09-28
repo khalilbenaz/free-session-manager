@@ -243,6 +243,12 @@ function fitOne(id, redraw) {
   const t = id && terms.get(id);
   if (!t || !t.el.classList.contains('show')) return;
   try { t.fit.fit(); } catch { }
+  // garde-fou : la dernière ligne ne doit jamais passer sous le bord visible (arrondis de cellule, zoom, fenêtre)
+  try {
+    const scr = t.el.querySelector('.xterm-screen');
+    const limit = Math.min(t.el.parentElement.getBoundingClientRect().bottom, window.innerHeight);
+    if (scr && t.term.rows > 3 && scr.getBoundingClientRect().bottom > limit - 2) t.term.resize(t.term.cols, t.term.rows - 1);
+  } catch { }
   // un terminal resté caché (display:none) garde une barre de défilement fausse : la recalculer
   const resync = () => { try { t.term._core?._viewport?._sync?.(); } catch { } };
   resync(); requestAnimationFrame(resync); setTimeout(resync, 200);
