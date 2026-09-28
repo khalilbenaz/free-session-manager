@@ -1077,16 +1077,6 @@ function pickSessionModel(id, triggerEl) {
     ];
   });
 
-  items.push('-', [
-    t('✏️ Autre modèle…'),
-    async () => {
-      const val = await askName(t('Nom du modèle'), curModel, t('Ex: kilo/openrouter/free, nemotron-3…'));
-      if (val !== null && val.trim()) {
-        setSessionModel(id, val.trim());
-      }
-    }
-  ]);
-
   if (triggerEl) {
     const r = triggerEl.getBoundingClientRect();
     showMenu(items, r.left, r.bottom + 4);

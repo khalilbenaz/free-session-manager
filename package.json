@@ -1,6 +1,6 @@
 {
   "name": "free-session-manager",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Application de bureau et gestionnaire de sessions multi-agents 100% gratuit dédié aux modèles de Kilo, OpenCode et OpenRouter.",
   "repository": "https://github.com/khalilbenaz/free-session-manager",
   "bin": {
@@ -79,7 +79,7 @@
       "scripts/**",
       "electron/**",
       "server.js",
-        "pick-folder.ps1",
+      "pick-folder.ps1",
       "package.json",
       "!**/*.pdb",
       "!**/*.map",

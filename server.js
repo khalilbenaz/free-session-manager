@@ -7,6 +7,20 @@ const os = require('os');
 const crypto = require('crypto');
 const { execFile } = require('child_process');
 const pty = require('node-pty');
+// node-pty lance les terminaux via spawn-helper : sans bit exécutable (perdu à l'install
+// ou à la copie de l'app), tout lancement échoue en « posix_spawnp failed ».
+function ensureSpawnHelper() {
+  if (process.platform === 'win32') return;
+  let base;
+  try { base = path.dirname(require.resolve('node-pty/package.json')); } catch { return; }
+  for (const f of [
+    path.join(base, 'prebuilds', `${process.platform}-${process.arch}`, 'spawn-helper'),
+    path.join(base, 'build', 'Release', 'spawn-helper'),
+  ]) {
+    try { if (!(fs.statSync(f).mode & 0o111)) fs.chmodSync(f, 0o755); } catch {}
+  }
+}
+ensureSpawnHelper();
 const { WebSocketServer } = require('ws');
 const {
   ROOT, PORT, IS_WIN, IS_MAC, DATA, LEGACY_DATA,

@@ -100,7 +100,6 @@ const EN = {
   'Basculer sans changer de modèle': 'Switch without changing model', 'Basculer maintenant': 'Switch now',
   'Bascule impossible': 'Cannot switch', 'Changer de modèle…': 'Change model…',
   'Agent actif': 'Active agent', 'Modèle actif': 'Active model', 'Cliquer pour changer de modèle': 'Click to change model',
-  '✏️ Autre modèle…': '✏️ Other model…',
   'Ex: kilo/openrouter/free, nemotron-3…': 'e.g. kilo/openrouter/free, nemotron-3…',
   'Redémarrer la session': 'Restart session', 'Redémarrer / reprendre la conversation': 'Restart / resume the conversation',
   // effort / modes (options reconstruites à l'affichage)
