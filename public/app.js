@@ -49,11 +49,6 @@ let AGENT_MODELS = {
   ],
   openrouter: [
     { value: 'openrouter/openrouter/free', label: '🌐 OpenRouter Free (Auto)' },
-    { value: 'openrouter/meta-llama/llama-3.3-70b-instruct:free', label: '🌐 Llama 3.3 70B Instruct (Free)' },
-    { value: 'openrouter/google/gemini-2.0-flash-exp:free', label: '🌐 Gemini 2.0 Flash Exp (Free)' },
-    { value: 'openrouter/deepseek/deepseek-r1:free', label: '🌐 DeepSeek R1 (Free)' },
-    { value: 'openrouter/qwen/qwen-2.5-coder-32b-instruct:free', label: '🌐 Qwen 2.5 Coder 32B (Free)' },
-    { value: 'openrouter/mistralai/mistral-small-24b-instruct-2501:free', label: '🌐 Mistral Small 24B (Free)' },
     { value: 'openrouter/nvidia/nemotron-3-super-120b-a12b:free', label: '🌐 Nemotron 3 Super 120B (Free)' },
     { value: 'openrouter/nvidia/nemotron-3-ultra-550b-a55b:free', label: '🌐 Nemotron 3 Ultra 550B (Free)' },
     { value: 'openrouter/nvidia/nemotron-3.5-lightning:free', label: '🌐 Nemotron 3.5 Lightning (Free)' },
