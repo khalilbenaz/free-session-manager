@@ -81,11 +81,11 @@ main { flex: 1; display: flex; flex-direction: column; min-width: 0; position: r
   border-bottom: 1px solid var(--line);
   background: var(--panel);
   min-height: 40px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none;
+  /* les seuils suivent la largeur de la barre (pas de la fenêtre : barre latérale et panneau varient) ;
+     en dernier recours les boutons passent à la ligne plutôt que d'être tronqués */
+  container: bar / inline-size;
+  overflow: hidden;
 }
-#bar::-webkit-scrollbar { display: none; }
 #bar .name {
   font-weight: 600;
   cursor: text;
@@ -141,7 +141,7 @@ main { flex: 1; display: flex; flex-direction: column; min-width: 0; position: r
 @keyframes switchPulse { 50% { opacity: .5; } }
 #bar .name[contenteditable="true"] { outline: 1px solid var(--accent); border-radius: 4px; padding: 0 4px; }
 #bar .model-badge {
-  display: inline-flex;
+  display: inline-block;
   align-items: center;
   gap: 3px;
   font-size: 10px;
@@ -150,7 +150,10 @@ main { flex: 1; display: flex; flex-direction: column; min-width: 0; position: r
   border-radius: 6px;
   line-height: 1.2;
   white-space: nowrap !important;
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 50px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   background: var(--panel2);
   color: var(--fg);
   border: 1px solid var(--line);
@@ -205,21 +208,21 @@ main { flex: 1; display: flex; flex-direction: column; min-width: 0; position: r
   font-weight: 500;
 }
 
-@media (max-width: 1250px) {
+@container bar (max-width: 1000px) {
   #bar .msg { display: none; }
   #bar .cwd { max-width: 100px; }
 }
-@media (max-width: 1100px) {
+@container bar (max-width: 970px) {
   #bar .cwd { display: none; }
   #bar .layouts { display: none; }
   #bar #btnOpen { display: none; }
 }
-@media (max-width: 950px) {
+@container bar (max-width: 760px) {
   #bar #btnChanges { display: none; }
-  #bar .name { max-width: 120px; }
+  #bar #btnSwitchLabel { display: none; }
 }
-@media (max-width: 800px) {
-  #bar #curModelBadge { max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
+@container bar (max-width: 600px) {
+  #bar #btnRename, #bar #btnAttach { display: none; }
 }
 /* ---- zone de travail : panneaux (vue partagée) + panneau latéral */
 #work { flex: 1; display: flex; min-height: 0; }
