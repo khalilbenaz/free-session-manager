@@ -1,34 +1,30 @@
 #!/usr/bin/env node
 'use strict';
-// sm — Sessions Manager (Claude Code & Antigravity CLI)
+// sm — Free Session Manager (agents natifs Kilo, OpenCode, OpenRouter)
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const http = require('http');
 const { spawn, execFileSync } = require('child_process');
-const { ROOT, PORT, IS_WIN, IS_MAC, DATA, TASK_NAME, LAUNCHD_LABEL, APP_NAME, resolveClaude, resolveAgy, hasClaude, hasAgy } = require('../lib/config');
+const { ROOT, PORT, IS_WIN, IS_MAC, DATA, TASK_NAME, LAUNCHD_LABEL, APP_NAME } = require('../lib/config');
 
 const URL_ = `http://127.0.0.1:${PORT}/`;
 const SERVER = path.join(ROOT, 'server.js');
 const NODE = process.execPath;
 const PKG = require('../package.json');
 
-const HELP = `sm ${PKG.version} — Sessions Manager (Claude Code & Antigravity)
+const HELP = `fsm ${PKG.version} — Free Session Manager (Kilo, OpenCode, OpenRouter natifs)
 
-  sm                ouvre la fenêtre (démarre le serveur si besoin)
-  sm install        démarrage automatique à l'ouverture de session + raccourci
+  fsm                ouvre la fenêtre (démarre le serveur si besoin)
+  fsm install        démarrage automatique à l'ouverture de session + raccourci
                     (Windows : tâche planifiée ; macOS : LaunchAgent + ~/Applications)
-  sm uninstall      retire le démarrage automatique et le raccourci
-  sm update-agy     recherche et installe la mise à jour d'Antigravity CLI (agy update)
-  sm install-claude installe Claude Code CLI globalement via npm
-  sm stop           arrête le serveur (les sessions reviendront au prochain lancement)
-  sm restart | status | log | where
+  fsm uninstall      retire le démarrage automatique et le raccourci
+  fsm stop           arrête le serveur (les sessions reviendront au prochain lancement)
+  fsm restart | status | log | where
 
   Données : ${DATA}
   Port : ${PORT} (variable SM_PORT)
-  Agents :
-    - Claude Code : ${hasClaude() ? 'installé (' + resolveClaude() + ')' : 'non détecté'}
-    - Antigravity : ${hasAgy() ? 'installé (' + resolveAgy() + ')' : 'non détecté'}`;
+  Agents : Kilo, OpenCode, OpenRouter — exécution native, aucune CLI requise`;
 
 // ---------------------------------------------------------------- utilitaires
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -69,7 +65,7 @@ function installWin() {
     const s = spawn(exe, args, { detached: true, stdio: 'ignore', windowsHide: true }); s.unref();
   }
   const ico = path.join(ROOT, 'public', 'icon.ico');
-  const shortcutScript = `$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut(${psq(START_MENU)}); $s.TargetPath = ${psq(NODE)}; $s.Arguments = ${psq(path.join(ROOT, 'bin', 'sm.js'))}; $s.WorkingDirectory = ${psq(ROOT)}; $s.Description = 'Sessions Manager — Claude Code & Antigravity'; if (Test-Path ${psq(ico)}) { $s.IconLocation = ${psq(ico)}; }; $s.Save()`;
+  const shortcutScript = `$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut(${psq(START_MENU)}); $s.TargetPath = ${psq(NODE)}; $s.Arguments = ${psq(path.join(ROOT, 'bin', 'sm.js'))}; $s.WorkingDirectory = ${psq(ROOT)}; $s.Description = 'Free Session Manager'; if (Test-Path ${psq(ico)}) { $s.IconLocation = ${psq(ico)}; }; $s.Save()`;
   try { ps(shortcutScript); } catch { }
 }
 
@@ -88,7 +84,7 @@ function plistContent() {
   const { exe, args } = serverLaunch();
   const fullArgs = [exe, ...args].map(a => `    <string>${a}</string>`).join('\n');
   // Le dossier de node passe en tête : avec un gestionnaire de versions (fnm/nvm),
-  // le `claude` de ~/.local/bin ou /opt/homebrew peut être une version périmée.
+  // un binaire homonyme de ~/.local/bin ou /opt/homebrew peut être une version périmée.
   const home = os.homedir();
   const dirs = [path.dirname(exe), path.join(home, '.local', 'bin'), '/opt/homebrew/bin',
     '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'];
@@ -208,30 +204,6 @@ async function main() {
   if (cmd === 'status') {
     const up = await isUp();
     console.log(`Sessions Manager : ${up ? 'en ligne' : 'hors ligne'} (${URL_})`);
-    console.log(`  Claude Code   : ${hasClaude() ? '✓ ' + resolveClaude() : '✗ non détecté'}`);
-    console.log(`  Antigravity   : ${hasAgy() ? '✓ ' + resolveAgy() : '✗ non détecté'}`);
-    return;
-  }
-  if (cmd === 'update-agy') {
-    const { updateAgy } = require('../lib/agents');
-    console.log("Recherche de mise à jour pour Antigravity CLI...");
-    try {
-      const res = await updateAgy(console.log);
-      console.log("✓ Mise à jour terminée.");
-    } catch (e) {
-      console.error("✕ Erreur :", e.message);
-    }
-    return;
-  }
-  if (cmd === 'install-claude') {
-    const { installClaude } = require('../lib/agents');
-    console.log("Installation de Claude Code via npm...");
-    try {
-      await installClaude(console.log);
-      console.log("✓ Claude Code installé avec succès.");
-    } catch (e) {
-      console.error("✕ Erreur :", e.message);
-    }
     return;
   }
   if (cmd === 'log') {

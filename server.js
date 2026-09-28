@@ -1,5 +1,5 @@
 'use strict';
-// Sessions Manager — serveur local : héberge N sessions Claude Code & Antigravity CLI (PTY) et les expose à une UI web.
+// Free Session Manager — serveur local : héberge N sessions d'agents natifs (kilo / opencode / openrouter, PTY) et les expose à une UI web.
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -10,9 +10,7 @@ const pty = require('node-pty');
 const { WebSocketServer } = require('ws');
 const {
   ROOT, PORT, IS_WIN, IS_MAC, DATA, LEGACY_DATA,
-  which, resolveNode, resolveKilo, hasKilo, resolveOpencode, hasOpencode, resolveOpenrouter, hasOpenrouter, resolveClaude, resolveAgy, hasClaude, hasAgy, stablePath,
-  CLAUDE_DIR, CLAUDE_HISTORY_FILE, CLAUDE_PROJECTS_DIR,
-  BRAIN_DIR, AGY_HISTORY_FILE, GEMINI_CONFIG_DIR
+  which, resolveNode, resolveKilo, resolveOpencode, resolveOpenrouter, resolveDirectAgent,
 } = require('./lib/config');
 const handoff = require('./lib/handoff');
 
@@ -49,7 +47,7 @@ const TOKEN = fs.existsSync(TOKEN_FILE)
   ? fs.readFileSync(TOKEN_FILE, 'utf8').trim()
   : (() => { const t = crypto.randomBytes(24).toString('hex'); fs.writeFileSync(TOKEN_FILE, t); return t; })();
 
-// Jeton à portée réduite, injecté dans l'environnement des agents pour hook.js : il n'ouvre
+// Jeton à portée réduite, injecté dans l'environnement des agents natifs : il n'ouvre
 // que /api/hook (statuts). Tout processus enfant d'un agent ne peut donc pas piloter l'API.
 const HOOK_TOKEN_FILE = path.join(DATA, 'hook-token');
 const HOOK_TOKEN = fs.existsSync(HOOK_TOKEN_FILE)
@@ -60,70 +58,7 @@ const NODE_BIN = resolveNode();
 const KILO = resolveKilo();
 const OPENCODE = resolveOpencode();
 const OPENROUTER = resolveOpenrouter();
-const CLAUDE = resolveClaude();
-const AGY = resolveAgy();
-
-// Hooks Claude Code injectés via --settings
-const fwd = p => p.replace(/\\/g, '/');
-const HOOK_SCRIPT = fwd(path.join(ROOT, 'hook.js'));
-function hookRunner() {
-  if (!process.versions.electron) return `"${fwd(process.execPath)}" "${HOOK_SCRIPT}"`;
-  const sysNode = stablePath(which(IS_WIN ? 'node.exe' : 'node'));
-  if (sysNode) return `"${fwd(sysNode)}" "${HOOK_SCRIPT}"`;
-  const file = path.join(DATA, IS_WIN ? 'hook.cmd' : 'hook.sh');
-  const body = IS_WIN
-    ? `@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n"${process.execPath}" "${path.join(ROOT, 'hook.js')}" %*\r\n`
-    : `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec "${process.execPath}" "${path.join(ROOT, 'hook.js')}" "$@"\n`;
-  fs.writeFileSync(file, body);
-  if (!IS_WIN) fs.chmodSync(file, 0o755);
-  return `"${fwd(file)}"`;
-}
-const HOOK_RUNNER = hookRunner();
-const hookCmd = (ev) => [{ hooks: [{ type: 'command', command: `${HOOK_RUNNER} ${ev}`, timeout: 15 }] }];
-const HOOK_SETTINGS = path.join(DATA, 'hooks-settings.json');
-fs.writeFileSync(HOOK_SETTINGS, JSON.stringify({
-  hooks: {
-    SessionStart: hookCmd('start'),
-    UserPromptSubmit: hookCmd('working'),
-    PreToolUse: hookCmd('working'),
-    Notification: hookCmd('attention'),
-    Stop: hookCmd('idle'),
-    SessionEnd: hookCmd('end'),
-  },
-}, null, 2));
-
-// Hooks Antigravity CLI enregistrés dans ~/.gemini/config/hooks.json
-function registerAgyHooks() {
-  try {
-    fs.mkdirSync(GEMINI_CONFIG_DIR, { recursive: true });
-    const hookConfigPath = path.join(GEMINI_CONFIG_DIR, 'hooks.json');
-    let current = {};
-    try { current = JSON.parse(fs.readFileSync(hookConfigPath, 'utf8')); } catch { }
-    const hookScript = path.join(ROOT, 'hook.js');
-    current['sessions-manager'] = {
-      enabled: true,
-      PreInvocation: [
-        { type: 'command', command: `node "${hookScript}" PreInvocation`, timeout: 5 }
-      ],
-      PreToolUse: [
-        {
-          matcher: '.*',
-          hooks: [
-            { type: 'command', command: `node "${hookScript}" PreToolUse`, timeout: 5 }
-          ]
-        }
-      ],
-      Stop: [
-        { type: 'command', command: `node "${hookScript}" Stop`, timeout: 5 }
-      ]
-    };
-    fs.writeFileSync(hookConfigPath, JSON.stringify(current, null, 2));
-  } catch (e) {
-    console.error('Erreur enregistrement hooks agy :', e.message);
-  }
-}
-registerAgyHooks();
-
+const DIRECT_AGENT = resolveDirectAgent();
 // ---------------------------------------------------------------- sessions gérées
 const STORE = path.join(DATA, 'sessions.json');
 const TITLES_FILE = path.join(DATA, 'titles.json');
@@ -135,15 +70,6 @@ function loadCustomTitles() {
 }
 function writeCustomTitle(id, title) {
   let ok = false;
-  // Format Claude
-  const f = transcriptPath(id);
-  if (f && title) {
-    try {
-      fs.appendFileSync(f, JSON.stringify({ type: 'custom-title', customTitle: title, sessionId: id }) + '\n');
-      ok = true;
-    } catch { }
-  }
-  // Format AGY
   try {
     const t = loadCustomTitles();
     t[id] = title;
@@ -158,7 +84,7 @@ const extra = s => Object.fromEntries(EXTRA_FIELDS.filter(k => s[k] !== undefine
 
 function persistNow() {
   const list = [...sessions.values()].map(s => ({
-    id: s.id, agent: s.agent || 'claude', name: s.name, cwd: s.cwd, args: s.args,
+    id: s.id, agent: s.agent || 'kilo', name: s.name, cwd: s.cwd, args: s.args,
     conversationId: s.conversationId, claudeSessionId: s.claudeSessionId,
     createdAt: s.createdAt, order: s.order, wantRun: s.wantRun !== false, named: !!s.named, titleFor: s.titleFor || null,
     ...extra(s), ...(s.lock ? { lock: s.lock } : {}),
@@ -178,7 +104,7 @@ function persist() {
 
 function publicView(s) {
   return {
-    id: s.id, agent: s.agent || 'claude', name: s.name, cwd: s.cwd, args: s.args, status: s.status, message: s.message,
+    id: s.id, agent: s.agent || 'kilo', name: s.name, cwd: s.cwd, args: s.args, status: s.status, message: s.message,
     conversationId: s.conversationId, claudeSessionId: s.claudeSessionId,
     createdAt: s.createdAt, lastActivity: s.lastActivity,
     statusSince: s.statusSince, alive: !!s.pty, order: s.order, ...extra(s),
@@ -200,41 +126,16 @@ function splitArgs(str) {
   return out;
 }
 
+// Transcript natif commun aux trois runners (bin/direct-agent.js).
+const TRANSCRIPTS = path.join(DATA, 'transcripts');
 function transcriptPath(id) {
   if (!/^[\w-]+$/.test(id || '')) return null;
-  // Antigravity brain
-  const brainFile = path.join(BRAIN_DIR, id, '.system_generated', 'logs', 'transcript.jsonl');
-  if (fs.existsSync(brainFile)) return brainFile;
-  // Claude Code projects
-  try {
-    if (fs.existsSync(CLAUDE_PROJECTS_DIR)) {
-      for (const d of fs.readdirSync(CLAUDE_PROJECTS_DIR)) {
-        const f = path.join(CLAUDE_PROJECTS_DIR, d, `${id}.jsonl`);
-        if (fs.existsSync(f)) return f;
-      }
-    }
-  } catch { }
-  return null;
-}
-const transcriptExists = id => !!transcriptPath(id);
-
-function lastTurnInterrupted(id) {
-  const f = transcriptPath(id);
-  if (!f) return false;
-  try {
-    const size = fs.statSync(f).size, len = Math.min(size, 64 * 1024), buf = Buffer.alloc(len);
-    const fd = fs.openSync(f, 'r');
-    try { fs.readSync(fd, buf, 0, len, Math.max(0, size - len)); } finally { fs.closeSync(fd); }
-    return buf.toString('utf8').includes('Request interrupted by user');
-  } catch { return false; }
+  const f = path.join(TRANSCRIPTS, `${id}.jsonl`);
+  return fs.existsSync(f) ? f : null;
 }
 
-function checkInterruptedSoon(s, ms = 250) {
-  setTimeout(() => {
-    const id = s.claudeSessionId || s.conversationId || s.id;
-    if ((s.status === 'working' || s.status === 'attention') && lastTurnInterrupted(id)) setStatus(s, 'idle', 'interrompu');
-  }, ms);
-}
+// Conversation portée par une session : celle reprise depuis l'historique, sinon la sienne.
+const convOf = s => s.conversationId || s.claudeSessionId || s.id;
 
 function renameSession(s, name) {
   s.name = String(name || s.name).trim().slice(0, 80) || s.name;
@@ -310,10 +211,16 @@ function handleTerminalQueries(s, p, data) {
 }
 
 function spawnSession(s, { resume, fork } = {}) {
-  const isOpencode = s.agent === 'opencode';
-  const isOpenrouter = s.agent === 'openrouter';
-  const isKilo = !isOpencode && !isOpenrouter;
-  const binary = isOpencode ? OPENCODE : (isOpenrouter ? NODE_BIN : KILO);
+  // Les trois agents (kilo/opencode/openrouter) sont tous natifs et lancés via
+  // le runner générique bin/direct-agent.js --provider <agent>, exécuté par
+  // notre propre Node.js (NODE_BIN). Plus aucune dépendance à un binaire CLI
+  // tiers (KILO/OPENCODE ne servent plus qu'à la détection dans lib/agents.js
+  // et au repli natif interne de direct-agent.js pour OpenCode).
+  const VALID_AGENTS = ['kilo', 'opencode', 'openrouter'];
+  const agent = VALID_AGENTS.includes(s.agent) ? s.agent : 'kilo';
+  const isOpencode = agent === 'opencode';
+  const isOpenrouter = agent === 'openrouter';
+  const binary = NODE_BIN;
 
   let explicitModel = s.model || '';
   let explicitEffort = s.effort || '';
@@ -337,46 +244,19 @@ function spawnSession(s, { resume, fork } = {}) {
     else extraArgs.push(a);
   }
 
-  const defaultModel = agentDefaults(s.agent).model;
+  const defaultModel = agentDefaults(agent).model;
   const effectiveModel = explicitModel || defaultModel;
   s.model = effectiveModel;
 
-  const args = [];
+  const args = [DIRECT_AGENT, '--provider', agent];
 
-  if (isOpencode) {
-    const rawArgs = splitArgs(process.env.SM_OPENCODE_ARGS || '');
-    args.push(...rawArgs);
-    if (resume) args.push('--session', resume);
-    args.push('--model', effectiveModel);
-    if (explicitMode === 'dangerously-skip-permissions') {
-      args.push('--auto');
-    }
-    if (firstPrompt) {
-      args.push('--prompt', firstPrompt);
-    }
-  } else if (isOpenrouter) {
-    // Session OpenRouter 100% Directe (Node.js natif, sans passer par Kilo)
-    args.push(OPENROUTER);
-    const rawArgs = splitArgs(process.env.SM_OPENROUTER_ARGS || '');
-    args.push(...rawArgs);
-    if (resume) args.push('--session', resume);
-    else if (s.id) args.push('--session', s.id);
-    args.push('--model', effectiveModel);
-    if (firstPrompt) {
-      args.push('--prompt', firstPrompt);
-    }
-  } else {
-    // Kilo
-    const rawArgs = splitArgs(process.env.SM_KILO_ARGS || '');
-    args.push(...rawArgs);
-    if (resume) args.push('--session', resume);
-    args.push('--model', effectiveModel);
-    if (explicitMode === 'dangerously-skip-permissions') {
-      args.push('--auto');
-    }
-    if (firstPrompt) {
-      args.push('--prompt', firstPrompt);
-    }
+  const rawArgsEnv = isOpencode ? 'SM_OPENCODE_ARGS' : (isOpenrouter ? 'SM_OPENROUTER_ARGS' : 'SM_KILO_ARGS');
+  const rawArgs = splitArgs(process.env[rawArgsEnv] || '');
+  args.push(...rawArgs);
+  args.push('--session', resume || convOf(s));
+  args.push('--model', effectiveModel);
+  if (firstPrompt) {
+    args.push('--prompt', firstPrompt);
   }
 
   args.push(...extraArgs);
@@ -385,7 +265,7 @@ function spawnSession(s, { resume, fork } = {}) {
   const env = {
     ...process.env,
     SM_ID: s.id,
-    SM_AGENT: isOpencode ? 'opencode' : (isOpenrouter ? 'openrouter' : 'kilo'),
+    SM_AGENT: agent,
     SM_PORT: String(PORT),
     SM_TOKEN: HOOK_TOKEN,
     FSM_ID: s.id,
@@ -395,12 +275,14 @@ function spawnSession(s, { resume, fork } = {}) {
     OPENROUTER_API_TOKEN: openrouterKey,
     COLORTERM: 'truecolor',
   };
+  if (process.env.KILO_API_KEY) env.KILO_API_KEY = process.env.KILO_API_KEY;
+  if (process.env.OPENCODE_API_KEY) env.OPENCODE_API_KEY = process.env.OPENCODE_API_KEY;
 
   // Évite les propagations indésirables d'agents parents
   for (const k of Object.keys(env)) {
     if (/^(CLAUDECODE|CLAUDE_CODE_|CLAUDE_PID$|CLAUDE_EFFORT$|AI_AGENT$|ANTIGRAVITY_AGENT|ELECTRON_RUN_AS_NODE$)/i.test(k)) delete env[k];
   }
-  if (isOpenrouter && binary === process.execPath && process.versions.electron) {
+  if (binary === process.execPath && process.versions.electron) {
     env.ELECTRON_RUN_AS_NODE = '1';
   }
 
@@ -481,10 +363,8 @@ function killSession(s) {
 }
 
 // ------------------------------------------------- bascule d'agent dans une même session
-// `claude` et `agy` n'échangent pas leurs conversations : le contexte est reconstruit
-// depuis le transcript (briefing Markdown) puis injecté comme premier prompt de l'agent
-// cible. Si cette session a déjà utilisé l'agent cible, on reprend sa conversation :
-// les deux historiques s'accumulent alors au fil des allers-retours.
+// Les trois agents natifs partagent le transcript de la session : la bascule relance
+// simplement le runner avec un autre fournisseur sur la même conversation.
 const AGENT_MODELS_MAP = {
   kilo: [
     { value: 'kilo/nvidia/nemotron-3-super-120b-a12b:free', label: '⚡ Nemotron 3 Super 120B (Free)' },
@@ -571,30 +451,23 @@ function fitModel(agent, model) {
 function switchAgent(s, to, override = {}) {
   const from = s.agent || 'kilo';
 
-  // 1. Sauvegarde et transmission du contexte (Handoff Briefing)
+  // 1. Transmission du contexte. Les runners natifs partagent DATA/transcripts/<id>.jsonl
+  // et le rechargent à la reprise : s'il existe, le contexte passe tel quel, sans
+  // briefing (et le fichier n'est jamais réécrit). Sinon, on amorce la nouvelle session
+  // avec un briefing construit depuis le tampon terminal, sans rien écrire sur disque.
   let brief = null;
   let stats = null;
-  let file = handoff.transcriptFile(from, s.conversationId || s.claudeSessionId || s.id);
-  if (!file && s.buf && s.buf.length > 50) {
-    try {
-      const transDir = path.join(DATA, 'transcripts');
-      fs.mkdirSync(transDir, { recursive: true });
-      const f = path.join(transDir, `${s.id}.jsonl`);
-      const cleanBuf = s.buf.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').trim();
-      if (cleanBuf.length > 20) {
-        fs.writeFileSync(f, JSON.stringify({ role: 'user', content: cleanBuf.slice(0, 10000), timestamp: new Date().toISOString() }) + '\n');
-        file = f;
-      }
-    } catch (e) {}
-  }
-
+  const file = handoff.transcriptFile(convOf(s));
   if (file) {
-    const built = handoff.buildBriefing({
-      file, from, to, sessionName: s.name, cwd: s.cwd,
-    });
-    if (built && built.markdown) {
-      brief = built.markdown;
-      stats = built.stats;
+    const built = handoff.buildBriefing({ file, from, to, sessionName: s.name, cwd: s.cwd });
+    if (built) stats = built.stats;
+  } else if (s.buf && s.buf.length > 50) {
+    const cleanBuf = s.buf.replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '').trim();
+    if (cleanBuf.length > 20) {
+      brief = `# Transfert de contexte : ${handoff.AGENT_LABEL[from] || from} → ${handoff.AGENT_LABEL[to] || to}\n\n`
+        + `Voici la sortie de la session précédente (dossier \`${s.cwd || ''}\`). Poursuis le travail là où il s'est arrêté.\n\n`
+        + '```\n' + cleanBuf.slice(-10000) + '\n```\n';
+      stats = { chars: brief.length };
       s.initialPrompt = brief;
     }
   }
@@ -616,7 +489,7 @@ function switchAgent(s, to, override = {}) {
   s.buf = '';
   broadcast({ t: 'clear', id: s.id });
   const AGENT_NAMES = { kilo: 'Kilo Free', opencode: 'OpenCode', openrouter: 'OpenRouter Free' };
-  s.buf += `\x1b[90m[fsm] Bascule vers ${AGENT_NAMES[to] || to} · Modèle: ${s.model}${brief ? ' · Contexte partagé transmis' : ''}\x1b[0m\r\n`;
+  s.buf += `\x1b[90m[fsm] Bascule vers ${AGENT_NAMES[to] || to} · Modèle: ${s.model}${file ? ' · Contexte partagé' : (brief ? ' · Contexte transmis' : '')}\x1b[0m\r\n`;
   spawnSession(s);
   s.switches = [...(s.switches || []), { from, to, at: Date.now() }].slice(-20);
   persist();
@@ -629,7 +502,7 @@ const toRestore = [];
 try {
   for (const x of JSON.parse(fs.readFileSync(STORE, 'utf8'))) {
     const s = {
-      agent: x.agent || 'claude', ...x,
+      agent: x.agent || 'kilo', ...x,
       status: 'exited', message: 'arrêtée', statusSince: Date.now(), lastActivity: x.createdAt, buf: '', pty: null
     };
     sessions.set(x.id, s);
@@ -647,67 +520,33 @@ function restoreSessions() {
   }, i * 1200));
 }
 
-// ---------------------------------------------------------------- historique (Claude & AGY)
+// ---------------------------------------------------------------- historique (transcripts natifs)
 const histCache = new Map();
 
 function readSlice(fd, pos, len) {
   const b = Buffer.alloc(len); const n = fs.readSync(fd, b, 0, len, pos); return b.slice(0, n).toString('utf8');
 }
 
-function parseAgyTranscript(file, stat, id) {
+function parseNativeTranscript(file, stat, id) {
   const fd = fs.openSync(file, 'r');
   try {
-    const HEAD = 96 * 1024, TAIL = 96 * 1024;
+    const HEAD = 64 * 1024, TAIL = 64 * 1024;
     const head = readSlice(fd, 0, Math.min(HEAD, stat.size));
     const tail = stat.size > HEAD ? readSlice(fd, Math.max(0, stat.size - TAIL), Math.min(TAIL, stat.size)) : '';
     let firstPrompt = null, lastPrompt = null;
     for (const line of (head + '\n' + tail).split('\n')) {
       if (!line.startsWith('{')) continue;
       let o; try { o = JSON.parse(line); } catch { continue; }
-      if (o.type === 'USER_INPUT' && o.content) {
-        let text = o.content;
-        const m = text.match(/<USER_REQUEST>([\s\S]*?)<\/USER_REQUEST>/);
-        if (m) text = m[1].trim();
-        if (!firstPrompt) firstPrompt = text;
-        lastPrompt = text;
+      if (o.role === 'user' && typeof o.content === 'string' && o.content.trim()) {
+        if (!firstPrompt) firstPrompt = o.content.trim();
+        lastPrompt = o.content.trim();
       }
     }
+    if (!firstPrompt) return null;
     return {
-      id, cwd: '', branch: null, agent: 'agy',
-      title: (firstPrompt || lastPrompt || '').slice(0, 120) || '(sans titre)',
-      lastPrompt: (lastPrompt || firstPrompt || '').slice(0, 200),
-      mtime: stat.mtimeMs, size: stat.size,
-    };
-  } finally { fs.closeSync(fd); }
-}
-
-function parseClaudeTranscript(file, stat) {
-  const fd = fs.openSync(file, 'r');
-  try {
-    const HEAD = 64 * 1024, TAIL = 64 * 1024;
-    const head = readSlice(fd, 0, Math.min(HEAD, stat.size));
-    const tail = stat.size > HEAD ? readSlice(fd, Math.max(0, stat.size - TAIL), Math.min(TAIL, stat.size)) : '';
-    let cwd = '', branch = null, title = null, customTitle = null, firstPrompt = null, lastPrompt = null;
-    for (const line of (head + '\n' + tail).split('\n')) {
-      if (!line.startsWith('{')) continue;
-      let o; try { o = JSON.parse(line); } catch { continue; }
-      if (o.cwd && !cwd) cwd = o.cwd;
-      if (o.gitBranch && !branch) branch = o.gitBranch;
-      if (o.type === 'ai-title' && o.aiTitle) title = o.aiTitle;
-      if (o.type === 'custom-title' && o.customTitle) customTitle = o.customTitle;
-      if (o.type === 'summary' && o.summary && !title) title = o.summary;
-      if (o.type === 'last-prompt' && o.lastPrompt) lastPrompt = o.lastPrompt;
-      if (!firstPrompt && o.type === 'user' && o.message && !o.isMeta) {
-        const c = o.message.content;
-        const txt = typeof c === 'string' ? c : Array.isArray(c) ? (c.find(p => p.type === 'text') || {}).text : null;
-        if (txt && !txt.startsWith('<') && !txt.startsWith('Caveat:')) firstPrompt = txt;
-      }
-    }
-    if (!cwd && !firstPrompt && !title) return null;
-    return {
-      id: path.basename(file, '.jsonl'), cwd, branch, agent: 'claude',
-      title: customTitle || title || (firstPrompt || lastPrompt || '').slice(0, 120) || '(sans titre)',
-      lastPrompt: (lastPrompt || firstPrompt || '').slice(0, 200),
+      id, cwd: '', branch: null, agent: 'kilo',
+      title: firstPrompt.slice(0, 120),
+      lastPrompt: (lastPrompt || firstPrompt).slice(0, 200),
       mtime: stat.mtimeMs, size: stat.size,
     };
   } finally { fs.closeSync(fd); }
@@ -715,84 +554,30 @@ function parseClaudeTranscript(file, stat) {
 
 function history() {
   const out = [];
-  const seen = new Set();
-  const seenFiles = new Set(); // fichiers rencontrés durant ce scan, pour purger histCache
   const titles = loadCustomTitles();
-
-  // 1. Antigravity history.jsonl
-  if (fs.existsSync(AGY_HISTORY_FILE)) {
-    try {
-      const lines = fs.readFileSync(AGY_HISTORY_FILE, 'utf8').trim().split('\n');
-      for (let i = lines.length - 1; i >= 0; i--) {
-        const l = lines[i];
-        if (!l.startsWith('{')) continue;
-        let o; try { o = JSON.parse(l); } catch { continue; }
-        const id = o.conversationId;
-        if (!id || seen.has(id)) continue;
-        seen.add(id);
-
-        const title = titles[id] || o.display || '(sans titre)';
-        out.push({
-          id, cwd: o.workspace || '', branch: null, agent: 'agy',
-          title: title.slice(0, 120),
-          lastPrompt: (o.display || '').slice(0, 200),
-          mtime: o.timestamp || Date.now(),
-          size: 1024,
-        });
-      }
-    } catch { }
+  const byId = new Map([...sessions.values()].map(s => [convOf(s), s]));
+  let files = [];
+  try { files = fs.readdirSync(TRANSCRIPTS).filter(f => f.endsWith('.jsonl')); } catch { }
+  const seenFiles = new Set();
+  for (const f of files) {
+    const id = path.basename(f, '.jsonl');
+    if (!/^[\w-]+$/.test(id)) continue;
+    const file = path.join(TRANSCRIPTS, f);
+    let st; try { st = fs.statSync(file); } catch { continue; }
+    seenFiles.add(file);
+    const c = histCache.get(file);
+    let entry;
+    if (c && c.mtime === st.mtimeMs) entry = c.entry;
+    else {
+      entry = null; try { entry = parseNativeTranscript(file, st, id); } catch { }
+      histCache.set(file, { mtime: st.mtimeMs, entry });
+    }
+    if (!entry) continue;
+    const s = byId.get(id);
+    out.push({ ...entry, title: titles[id] || entry.title, cwd: s ? s.cwd : '', agent: s ? s.agent : entry.agent });
   }
-
-  // 2. Antigravity brain
-  if (fs.existsSync(BRAIN_DIR)) {
-    try {
-      const dirs = fs.readdirSync(BRAIN_DIR);
-      for (const id of dirs) {
-        if (seen.has(id) || !/^[\w-]+$/.test(id)) continue;
-        const transcriptFile = path.join(BRAIN_DIR, id, '.system_generated', 'logs', 'transcript.jsonl');
-        let st; try { st = fs.statSync(transcriptFile); } catch { continue; }
-        if (st.size < 50) continue;
-        seen.add(id);
-        seenFiles.add(transcriptFile);
-        const c = histCache.get(transcriptFile);
-        if (c && c.mtime === st.mtimeMs) { if (c.entry) out.push(c.entry); continue; }
-        let entry = null; try { entry = parseAgyTranscript(transcriptFile, st, id); } catch { }
-        histCache.set(transcriptFile, { mtime: st.mtimeMs, entry });
-        if (entry) {
-          if (titles[id]) entry.title = titles[id];
-          out.push(entry);
-        }
-      }
-    } catch { }
-  }
-
-  // 3. Claude Code projects
-  if (fs.existsSync(CLAUDE_PROJECTS_DIR)) {
-    try {
-      for (const d of fs.readdirSync(CLAUDE_PROJECTS_DIR)) {
-        if (/observer-sessions/i.test(d)) continue;
-        const dir = path.join(CLAUDE_PROJECTS_DIR, d);
-        let files = []; try { files = fs.readdirSync(dir).filter(f => f.endsWith('.jsonl')); } catch { continue; }
-        for (const f of files) {
-          const file = path.join(dir, f);
-          const id = path.basename(f, '.jsonl');
-          if (seen.has(id)) continue;
-          let st; try { st = fs.statSync(file); } catch { continue; }
-          if (st.size < 200) continue;
-          seen.add(id);
-          seenFiles.add(file);
-          const c = histCache.get(file);
-          if (c && c.mtime === st.mtimeMs) { if (c.entry) out.push(c.entry); continue; }
-          let entry = null; try { entry = parseClaudeTranscript(file, st); } catch { }
-          histCache.set(file, { mtime: st.mtimeMs, entry });
-          if (entry) out.push(entry);
-        }
-      }
-    } catch { }
-  }
-
   // Purge : les entrées des transcripts disparus ne doivent pas s'accumuler en mémoire.
-  if (histCache.size > 400) for (const k of [...histCache.keys()]) if (!seenFiles.has(k)) histCache.delete(k);
+  for (const k of [...histCache.keys()]) if (!seenFiles.has(k)) histCache.delete(k);
   return out.sort((a, b) => b.mtime - a.mtime);
 }
 
@@ -807,7 +592,7 @@ function pickFolder(initial) {
     args = ['-NoProfile', '-STA', '-ExecutionPolicy', 'Bypass', '-File', path.join(ROOT, 'pick-folder.ps1')];
   } else if (IS_MAC) {
     cmd = 'osascript';
-    const init = initial ? ` default location (POSIX file "${initial.replace(/"/g, '\\"')}")` : '';
+    const init = initial ? ` default location (POSIX file "${initial.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}")` : '';
     args = ['-e', `try\nPOSIX path of (choose folder with prompt "Choisir un dossier de travail"${init})\non error\n""\nend try`];
   } else {
     cmd = 'zenity';
@@ -926,7 +711,7 @@ const server = http.createServer(async (req, res) => {
 
   if (!p.startsWith('/api/')) { res.writeHead(404); return res.end(); }
   const authHeader = req.headers['x-sm-token'] || req.headers['x-asm-token'] || req.headers['x-csm-token'];
-  // Le jeton « hook » (envoyé par hook.js depuis l'env des agents) n'est accepté que sur /api/hook.
+  // Le jeton « hook » (envoyé par bin/direct-agent.js depuis l'env des sessions) n'est accepté que sur /api/hook.
   if (authHeader !== TOKEN && !(p === '/api/hook' && authHeader === HOOK_TOKEN)) return json(res, 401, { error: 'token' });
 
   const lockOf = (() => {
@@ -953,7 +738,7 @@ const server = http.createServer(async (req, res) => {
       const { id, sm, asm, csm, event, agent: hookAgent, data } = await readBody(req);
       const targetId = id || sm || asm || csm;
       let s = sessions.get(targetId);
-      const convId = data && (data.conversationId || data.session_id);
+      const convId = data && data.conversationId;
       if (!s && convId) {
         s = [...sessions.values()].find(x => x.conversationId === convId || x.claudeSessionId === convId);
       }
@@ -963,18 +748,6 @@ const server = http.createServer(async (req, res) => {
       if (!s) return json(res, 404, {});
       if (hookAgent && hookAgent !== s.agent) {
         return json(res, 200, { ignored: true });
-      }
-      if (convId) {
-        const emittingAgent = hookAgent || (s.agent === 'agy' ? 'agy' : 'claude');
-        if (emittingAgent === 'agy') {
-          if (s.agent === 'agy') s.conversationId = convId;
-          s.agentIds = { ...(s.agentIds || {}), agy: convId };
-          persist();
-        } else if (emittingAgent === 'claude') {
-          if (s.agent === 'claude') s.claudeSessionId = convId;
-          s.agentIds = { ...(s.agentIds || {}), claude: convId };
-          persist();
-        }
       }
       if (event === 'start') { setStatus(s, 'idle'); emit('start', s); }
       else if (event === 'working') setStatus(s, 'working', data && data.tool_name ? data.tool_name : '');
@@ -1007,7 +780,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true });
     }
     if (p === '/api/history' && req.method === 'GET') {
-      const managed = new Set([...sessions.values()].map(s => s.conversationId || s.claudeSessionId).filter(Boolean));
+      const managed = new Set([...sessions.values()].map(convOf));
       return json(res, 200, history().slice(0, 400).map(h => {
         const lk = ctx.lockedByConversation?.(h.id);
         return lk ? { ...h, managed: true, locked: true, title: `🔒 ${lk.name}`, lastPrompt: '' } : { ...h, managed: managed.has(h.id) };
@@ -1088,7 +861,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { session: publicView(s), brief: r.brief, stats: r.stats });
     }
     if (s && m[2] === 'handoff' && req.method === 'GET') {
-      const file = handoff.transcriptFile(s.agent, s.conversationId || s.claudeSessionId || s.id);
+      const file = handoff.transcriptFile(convOf(s));
       if (!file) return json(res, 404, { error: 'aucun transcript' });
       const nextAgent = s.agent === 'kilo' ? 'opencode' : (s.agent === 'opencode' ? 'openrouter' : 'kilo');
       const built = handoff.buildBriefing({
@@ -1134,7 +907,6 @@ server.on('upgrade', (req, sock, head) => {
       if (s.lock && !ctx.wsCan?.(s, ws)) return;
       if (m.t === 'input' && s.pty) {
         if (typeof m.d === 'string' && m.d) { try { s.pty.write(m.d); } catch { } }
-        if (m.d === '\x03' || m.d === '\x1b') checkInterruptedSoon(s);
       }
       else if (m.t === 'resize' && m.cols > 10 && m.rows > 3) {
         s.cols = m.cols; s.rows = m.rows;
@@ -1151,7 +923,7 @@ function on(ev, fn) { (listeners[ev] = listeners[ev] || []).push(fn); }
 function emit(ev, ...a) { for (const fn of listeners[ev] || []) { try { fn(...a); } catch (e) { console.error('module', ev, e); } } }
 const ctx = {
   route, on, emit, json, readBody, sessions, publicView, persist, broadcast, createSession, killSession, spawnSession,
-  renameSession, history, transcriptPath, setStatus, DATA, ROOT, PORT, VERSION, CLAUDE, AGY, IS_WIN, IS_MAC, TOKEN_FILE,
+  renameSession, history, transcriptPath, setStatus, DATA, ROOT, PORT, VERSION, IS_WIN, IS_MAC, TOKEN_FILE,
 };
 for (const mod of ['lock', 'git', 'settings', 'usage', 'tools', 'queue', 'agents']) {
   try { require(`./lib/${mod}`)(ctx); } catch (e) { console.error(`module ${mod} :`, e); }

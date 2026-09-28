@@ -141,7 +141,7 @@
   const updText = st => t(UPD_LABEL[st.status] || '').replace('{v}', st.version || '').replace('{p}', st.progress ? st.progress + ' %' : '').replace('{e}', st.error || '');
   function renderAbout() {
     $('#aboutVersion').textContent = (window.smNative || window.asmNative || window.csmNative)?.appVersion?.() || document.querySelector('meta[name="sm-version"]')?.content || document.querySelector('meta[name="asm-version"]')?.content || document.querySelector('meta[name="csm-version"]')?.content || '';
-    $('#updateStatus').textContent = upd ? updText(upd) : ((window.smNative || window.asmNative || window.csmNative) ? '' : t('Dans le navigateur : mettre à jour avec git pull puis sm restart.'));
+    $('#updateStatus').textContent = upd ? updText(upd) : ((window.smNative || window.asmNative || window.csmNative) ? '' : t('Dans le navigateur : mettre à jour avec git pull puis fsm restart.'));
     $('#updateCheck').hidden = !(window.smNative || window.asmNative || window.csmNative)?.update;
     checkAgents();
   }
@@ -154,10 +154,6 @@
       if (oEl) oEl.textContent = s.opencode?.installed ? `v${s.opencode.version} (${s.opencode.path})` : t('non installé');
     } catch { }
   }
-  const btnClaude = $('#btnInstallClaude');
-  if (btnClaude) btnClaude.onclick = async () => {};
-  const btnAgy = $('#btnUpdateAgy');
-  if (btnAgy) btnAgy.onclick = async () => {};
   function onUpdate(st) {
     upd = st;
     const bar = $('#updateBar');

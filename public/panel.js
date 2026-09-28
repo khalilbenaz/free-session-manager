@@ -294,16 +294,6 @@
           title: `💻 ${t('Quotas OpenCode (Free)')}`,
           data: all.opencodeQuota,
           emptyMsg: t('Aucune donnée de quota OpenCode.')
-        },
-        claude: {
-          title: `🧡 ${t('Quotas Claude Code')}`,
-          data: all.claudeQuota,
-          emptyMsg: t('Aucune donnée de quota Claude Code disponible pour le moment.')
-        },
-        agy: {
-          title: `🔷 ${t('Quotas Antigravity (agy)')}`,
-          data: all.agyQuota,
-          emptyMsg: t('Aucune donnée de quota Antigravity disponible pour le moment.')
         }
       };
 
@@ -405,7 +395,7 @@
   window.addEventListener('csm:active', debounce(refresh, 150));
   window.addEventListener('csm:session', e => {
     const { prev, s } = e.detail;
-    // fin d'un tour de Claude : les fichiers ont pu changer
+    // fin d'un tour de l'agent : les fichiers ont pu changer
     if (s.id === active && prev && prev.status !== s.status && (s.status === 'idle' || s.status === 'attention') && !busy) refresh();
   });
   setInterval(() => { if (document.visibilityState === 'visible') loadChanges(); }, 20000);
