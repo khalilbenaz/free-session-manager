@@ -1466,9 +1466,9 @@ async function checkServerVersion() {
 
   const isAppMismatch = native && expected && server && expected !== server;
   if (isAppMismatch) {
-    $('#staleMsg').textContent = `L’application (${expected}) et le serveur (${server}) n’ont pas la même version. Redémarrer l’application applique la mise à jour.`;
+    $('#staleMsg').textContent = `L’application (${expected}) et le serveur (${server}) n’ont pas la même version. Redémarrer le serveur applique la mise à jour ; les sessions reviennent toutes seules.`;
     $('#btnStale').hidden = false;
-    $('#btnStale').textContent = t('Redémarrer l’application');
+    $('#btnStale').textContent = t('Redémarrer le serveur');
   } else {
     $('#staleMsg').textContent = `Le serveur tourne ${server ? 'la version ' + server : 'une ancienne version'}${expected ? ' (application : ' + expected + ')' : ''} : certaines fonctions ne marchent pas. Redémarrer le relance avec le bon code ; les sessions ouvertes reviennent toutes seules.`;
     $('#btnStale').hidden = !native?.restartServer;
@@ -1479,7 +1479,8 @@ async function checkServerVersion() {
 $('#btnStale').onclick = async () => {
   $('#btnStale').disabled = true; $('#btnStale').textContent = t('Redémarrage…');
   const native = window.smNative || window.asmNative || window.csmNative;
-  if (native?.relaunchApp) {
+  // Le serveur survit à la relance de l'app : c'est lui qu'il faut redémarrer.
+  if (!native?.restartServer && native?.relaunchApp) {
     await native.relaunchApp();
     return;
   }

@@ -99,7 +99,14 @@ function stopServer() {
 }
 
 async function ensureServer() {
-  if (await isUp()) return true;
+  if (await isUp()) {
+    // Le serveur survit à la fermeture de l'app : après une mise à jour, un serveur
+    // d'une autre version tournerait encore l'ancien code. On le remplace.
+    const v = ((await serverGet('/api/version')) || {}).version;
+    if (!v || v === app.getVersion()) return true;
+    stopServer();
+    for (let i = 0; i < 75 && (await isUp()); i++) await new Promise(r => setTimeout(r, 200));
+  }
   startServer();
   for (let i = 0; i < 40; i++) {
     await new Promise(r => setTimeout(r, 200));
