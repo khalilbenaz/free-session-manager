@@ -286,11 +286,16 @@ async function askAPI(userText, startTime) {
     } catch (e) {
       errorMsg = errText;
     }
-    console.log(`\r\n${C.red}[Erreur ${providerDisplayName()}] ${errorMsg}${C.reset}\r\n`);
-    if (/unavailable for free|not.*free|paid version|No endpoints found/i.test(errorMsg)) {
-      console.log(`${C.yellow}Ce modèle n'est plus gratuit. Choisis-en un autre dans le sélecteur, ou tape ${C.bold}/model ${target.normalizeModel('')}${C.reset}${C.yellow} (routeur gratuit automatique).${C.reset}\r\n`);
-    }
     messages.pop();
+    // Modèle devenu payant ou retiré : bascule une fois sur le routeur gratuit
+    // automatique et relance la question, plutôt que de laisser la session bloquée.
+    const fallbackModel = target.normalizeModel('');
+    if (/unavailable for free|not.*free|paid version|No endpoints found/i.test(errorMsg) && CURRENT_MODEL !== fallbackModel) {
+      console.log(`${C.yellow}${CURRENT_MODEL} n'est plus gratuit : bascule automatique sur ${C.bold}${fallbackModel}${C.reset}${C.yellow} (routeur gratuit).${C.reset}`);
+      CURRENT_MODEL = fallbackModel;
+      return askAPI(userText, startTime);
+    }
+    console.log(`\r\n${C.red}[Erreur ${providerDisplayName()}] ${errorMsg}${C.reset}\r\n`);
     return;
   }
 
@@ -319,23 +324,24 @@ async function askAPI(userText, startTime) {
         if (json.error) { streamError = json.error.message || JSON.stringify(json.error); continue; }
         const delta = json.choices?.[0]?.delta || {};
         // Les modèles de raisonnement (Nemotron Ultra, etc.) diffusent d'abord
-        // `delta.reasoning` : on l'affiche grisé pour ne pas donner l'impression
-        // d'une réponse vide ou bloquée, sans l'inclure dans l'historique.
+        // `delta.reasoning` : on n'en montre qu'un indicateur compact, effacé dès
+        // que la réponse arrive, pour ne pas donner l'impression d'un blocage.
         const reasoning = delta.reasoning || delta.reasoning_content || '';
         if (reasoning && !fullResponse) {
-          if (!thinking) { thinking = true; process.stdout.write(`${C.gray}💭 `); }
-          process.stdout.write(reasoning.replace(/\n/g, '\r\n'));
+          thinking = true;
+          const secs = Math.round((Date.now() - startTime) / 1000);
+          process.stdout.write(`\r\x1b[2K${C.gray}💭 réflexion… ${secs}s${C.reset}`);
         }
         const chunk = delta.content || '';
         if (chunk) {
-          if (thinking) { thinking = false; process.stdout.write(`${C.reset}\r\n\r\n`); }
+          if (thinking) { thinking = false; process.stdout.write('\r\x1b[2K'); }
           fullResponse += chunk;
           process.stdout.write(chunk);
         }
       } catch (e) {}
     }
   }
-  if (thinking) process.stdout.write(C.reset);
+  if (thinking) process.stdout.write('\r\x1b[2K');
 
   if (streamError) {
     console.log(`\r\n${C.red}[Erreur ${providerDisplayName()}] ${streamError}${C.reset}\r\n`);
