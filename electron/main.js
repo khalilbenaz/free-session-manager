@@ -1,5 +1,5 @@
 'use strict';
-// AGY Sessions — application de bureau (Windows / macOS).
+// Free Session Manager — application de bureau (Windows / macOS).
 const { app, BrowserWindow, Tray, Menu, nativeImage, shell, dialog, ipcMain, session, screen, Notification, nativeTheme } = require('electron');
 const fs = require('fs');
 const path = require('path');
@@ -211,7 +211,7 @@ function registerIpc() {
   const handlePick = async (e, initial) => {
     if (!trusted(e)) return null;
     const r = await dialog.showOpenDialog(win, {
-      title: 'Dossier de travail de la session AGY',
+      title: 'Dossier de travail de la session',
       defaultPath: typeof initial === 'string' && initial && fs.existsSync(initial) ? initial : undefined,
       properties: ['openDirectory', 'createDirectory', 'promptToCreate'],
     });

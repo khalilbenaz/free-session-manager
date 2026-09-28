@@ -87,7 +87,7 @@ const STATUS_KEYS = { starting: 'démarrage', working: 'travaille', attention: '
 const statusLabel = st => t(STATUS_KEYS[st] || st);
 
 // Réglages (serveur) : voir lib/settings.js. Valeurs par défaut en attendant la réponse.
-let SETTINGS = { theme: 'system', fontSize: 14, fontFamily: '', defaultAgent: 'kilo', defaultClaudeModel: '', defaultClaudeEffort: 'medium', defaultAgyModel: '', defaultAgyEffort: 'medium', defaultMode: '', notifications: true, sound: 'soft', dnd: false, waitingMinutes: 10, longRunMinutes: 0, worktreeDefault: false, compactSidebar: false, autoUpdate: true, onboarded: true };
+let SETTINGS = { theme: 'system', fontSize: 14, fontFamily: '', defaultAgent: 'kilo', defaultMode: '', notifications: true, sound: 'soft', dnd: false, waitingMinutes: 10, longRunMinutes: 0, worktreeDefault: false, compactSidebar: false, autoUpdate: true, onboarded: true };
 const THEMES = {
   dark: { background: '#101114', foreground: '#e6e6e6', cursor: '#d97757', selectionBackground: '#3a4150' },
   light: { background: '#fbfaf8', foreground: '#1f1b18', cursor: '#c4613f', selectionBackground: '#d9d2c7', black: '#1f1b18', brightBlack: '#6b6560', white: '#8b8580', brightWhite: '#1f1b18', yellow: '#9a6b00', brightYellow: '#8a5a00', green: '#1f7a3f', brightGreen: '#1a6b36', cyan: '#0e6f86', brightCyan: '#0b5f73', blue: '#1f5fbf', brightBlue: '#1a4fa0', magenta: '#8a3fa0', brightMagenta: '#7a2f90', red: '#c0392b', brightRed: '#a93226' },
@@ -175,7 +175,7 @@ function ensureTerm(id) {
     const i = panes.indexOf(id);
     if (i >= 0 && id !== active) { focusedPane = i; active = id; LS.set('csm.active', id); unread.delete(id); render(); renderPaneFrames(); }
   });
-  // Images / fichiers : glisser-déposer ou coller → copie enregistrée par le serveur, chemin collé dans Claude.
+  // Images / fichiers : glisser-déposer ou coller → copie enregistrée par le serveur, chemin collé dans l'agent.
   el.addEventListener('dragover', e => { if (hasFiles(e.dataTransfer)) { e.preventDefault(); el.classList.add('dropping'); } });
   el.addEventListener('dragleave', e => { if (!el.contains(e.relatedTarget)) el.classList.remove('dropping'); });
   el.addEventListener('drop', e => {
@@ -195,7 +195,7 @@ function ensureTerm(id) {
     if (e.type !== 'keydown') return true;
     if (isModAlt(e) && globalShortcut(e)) return false;
     // Windows : Ctrl+C avec sélection = copier ; Ctrl+V = coller (texte) via le presse-papiers du navigateur.
-    // macOS : Cmd+C / Cmd+V sont natifs ; Ctrl+C et Ctrl+V restent à Claude (interrompre, coller une image).
+    // macOS : Cmd+C / Cmd+V sont natifs ; Ctrl+C et Ctrl+V restent à l'agent (interrompre, coller une image).
     if (!IS_MAC && e.ctrlKey && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'c' && term.hasSelection()) {
       navigator.clipboard.writeText(term.getSelection()); term.clearSelection(); return false;
     }
@@ -228,7 +228,7 @@ function zoom(k) {
   fitAll();
 }
 
-// redraw=true : force Claude à repeindre tout l'écran (le PTY ne signale un resize que si la taille change,
+// redraw=true : force l'agent à repeindre tout l'écran (le PTY ne signale un resize que si la taille change,
 // d'où l'aller-retour rows-1 → rows). Nécessaire après un changement de session ou une reconnexion,
 // car le terminal caché a reçu la sortie à une autre taille.
 function fitOne(id, redraw) {
@@ -699,7 +699,7 @@ async function uploadFile(file) {
   return j.path;
 }
 
-// Colle les chemins comme le ferait un terminal après un glisser-déposer : Claude détecte les images et les attache.
+// Colle les chemins comme le ferait un terminal après un glisser-déposer : l'agent détecte les images et les attache.
 async function attachFiles(id, files) {
   const t = terms.get(id); if (!t) return;
   toast(`Envoi de ${files.length > 1 ? `${files.length} fichiers` : `« ${files[0].name || 'image'} »`}…`);
@@ -1473,7 +1473,7 @@ async function checkServerVersion() {
     $('#staleMsg').textContent = `Le serveur tourne ${server ? 'la version ' + server : 'une ancienne version'}${expected ? ' (application : ' + expected + ')' : ''} : certaines fonctions ne marchent pas. Redémarrer le relance avec le bon code ; les sessions ouvertes reviennent toutes seules.`;
     $('#btnStale').hidden = !native?.restartServer;
     $('#btnStale').textContent = t('Redémarrer le serveur');
-    if (!native) $('#staleMsg').textContent += ' Commande : sm restart';
+    if (!native) $('#staleMsg').textContent += ' Commande : fsm restart';
   }
 }
 $('#btnStale').onclick = async () => {

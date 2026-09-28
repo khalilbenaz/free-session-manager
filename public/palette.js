@@ -47,7 +47,7 @@
     ];
     if (s) a.push(
       ['✎', `${t('Renommer')} « ${s.name} »`, () => renameSession(s.id), `${MOD}+Alt+R`],
-      ['🔀', `${t('Basculer vers')} ${AGENT_LABEL[s.agent === 'agy' ? 'claude' : 'agy']}`, () => switchAgent(s.id), `${MOD}+Alt+S`],
+      ['🔀', `${t('Basculer vers')} ${AGENT_LABEL[getNextAgent(s.agent || 'kilo')]}`, () => switchAgent(s.id), `${MOD}+Alt+S`],
       ['📤', t('Aperçu du transfert de contexte'), () => previewHandoff(s.id)],
       ['↗', t('Ouvrir dans l’éditeur'), () => openIn(s.id, 'editor'), `${MOD}+Alt+E`],
       ['📁', IS_MAC ? t('Ouvrir dans le Finder') : t('Ouvrir dans l’Explorateur'), () => openIn(s.id, 'folder')],
@@ -144,7 +144,7 @@
     return text.replace(/\{dossier\}|\{folder\}/g, s?.cwd || '').replace(/\{branche\}|\{branch\}/g, s?.worktree?.branch || '')
       .replace(/\{nom\}|\{name\}/g, s?.name || '').replace(/\{selection\}/g, sel);
   }
-  // Insère dans la ligne de saisie de Claude sans valider (l'utilisateur relit puis Entrée).
+  // Insère dans la ligne de saisie de l'agent sans valider (l'utilisateur relit puis Entrée).
   function insertPrompt(id, p) {
     if (!id) return;
     const tt = terms.get(id); if (!tt) return;

@@ -137,8 +137,6 @@ main { flex: 1; display: flex; flex-direction: column; min-width: 0; position: r
 #bar .switch-btn:hover { background: color-mix(in srgb, var(--acc) 28%, transparent); }
 #bar .switch-btn:active { transform: translateY(1px); }
 #bar .switch-btn:disabled { opacity: .55; cursor: progress; }
-#bar .switch-btn.to-claude { --acc: #d97757; }
-#bar .switch-btn.to-agy { --acc: #6aa9ff; }
 #bar .switch-btn.busy { animation: switchPulse 1s ease-in-out infinite; }
 @keyframes switchPulse { 50% { opacity: .5; } }
 #bar .name[contenteditable="true"] { outline: 1px solid var(--accent); border-radius: 4px; padding: 0 4px; }
@@ -527,17 +525,6 @@ ul.results li > div .tag { align-self: flex-start; margin-left: 0; }
   background: var(--panel);
   border-color: var(--dim);
 }
-.agent-choice-btn.active[data-agent="claude"] {
-  border-color: #d97706;
-  background: rgba(217, 119, 6, 0.12);
-  color: #f59e0b;
-}
-.agent-choice-btn.active[data-agent="agy"] {
-  border-color: #3b82f6;
-  background: rgba(59, 130, 246, 0.12);
-  color: #60a5fa;
-}
-
 .agent-filter-bar {
   display: flex;
   gap: 4px;
@@ -640,7 +627,7 @@ li .agent-badge.switching {
   font-size: 12px;
 }
 
-/* ---- Quota Antigravity UI ---- */
+/* ---- Quota UI (per-agent box) ---- */
 .usage-agy-quota-box {
   margin-bottom: 20px;
   padding-bottom: 16px;
@@ -800,7 +787,4 @@ li .agent-badge.switching {
   display: flex; align-items: center; gap: 7px;
   margin: 4px 0 10px; font-size: 13px; font-weight: 700;
 }
-.quota-agent-head.is-agy { color: #2563eb; }
-.quota-agent-head.is-claude { color: #d97706; }
-:root[data-theme="dark"] .quota-agent-head.is-claude { color: #fbbf24; }
 .quota-sep { margin: 18px 0; border: 0; border-top: 1px solid var(--line); opacity: .6; }
