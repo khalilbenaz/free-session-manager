@@ -211,11 +211,11 @@ function printHelp() {
 const FREE_MODELS = {
   openrouter: [
     ['openrouter/free', 'Auto-router gratuit le plus adapté'],
-    ['deepseek/deepseek-r1:free', 'Raisonnement avancé'],
-    ['deepseek/deepseek-chat:free', 'V3 conversation'],
-    ['meta-llama/llama-3.3-70b-instruct:free', ''],
-    ['qwen/qwen-2.5-coder-32b-instruct:free', ''],
     ['nvidia/nemotron-3-super-120b-a12b:free', ''],
+    ['nvidia/nemotron-3.5-lightning:free', 'Rapide'],
+    ['qwen/qwen3.8-27b:free', ''],
+    ['google/gemma-4-31b-it:free', ''],
+    ['cohere/north-mini-code:free', 'Code'],
   ],
   kilo: [
     ['kilo-auto/free', 'Sélection automatique Kilo'],
@@ -287,6 +287,10 @@ async function askAPI(userText, startTime) {
       errorMsg = errText;
     }
     console.log(`\r\n${C.red}[Erreur ${providerDisplayName()}] ${errorMsg}${C.reset}\r\n`);
+    if (/unavailable for free|not.*free|paid version|No endpoints found/i.test(errorMsg)) {
+      console.log(`${C.yellow}Ce modèle n'est plus gratuit. Choisis-en un autre dans le sélecteur, ou tape ${C.bold}/model ${target.normalizeModel('')}${C.reset}${C.yellow} (routeur gratuit automatique).${C.reset}\r\n`);
+    }
+    messages.pop();
     return;
   }
 
@@ -294,6 +298,8 @@ async function askAPI(userText, startTime) {
   const decoder = new TextDecoder();
   let buffer = '';
   let fullResponse = '';
+  let thinking = false; // raisonnement en cours d'affichage (grisé)
+  let streamError = '';
 
   while (true) {
     const { done, value } = await reader.read();
@@ -310,18 +316,33 @@ async function askAPI(userText, startTime) {
       if (dataStr === '[DONE]') break;
       try {
         const json = JSON.parse(dataStr);
+        if (json.error) { streamError = json.error.message || JSON.stringify(json.error); continue; }
         const delta = json.choices?.[0]?.delta || {};
-        // `delta.reasoning` (chaîne de raisonnement de certains modèles) est
-        // volontairement ignorée ici : on ne diffuse que `delta.content`,
-        // ce qui suffit à ne jamais casser le flux même si le champ est présent.
+        // Les modèles de raisonnement (Nemotron Ultra, etc.) diffusent d'abord
+        // `delta.reasoning` : on l'affiche grisé pour ne pas donner l'impression
+        // d'une réponse vide ou bloquée, sans l'inclure dans l'historique.
+        const reasoning = delta.reasoning || delta.reasoning_content || '';
+        if (reasoning && !fullResponse) {
+          if (!thinking) { thinking = true; process.stdout.write(`${C.gray}💭 `); }
+          process.stdout.write(reasoning.replace(/\n/g, '\r\n'));
+        }
         const chunk = delta.content || '';
         if (chunk) {
+          if (thinking) { thinking = false; process.stdout.write(`${C.reset}\r\n\r\n`); }
           fullResponse += chunk;
           process.stdout.write(chunk);
         }
       } catch (e) {}
     }
   }
+  if (thinking) process.stdout.write(C.reset);
+
+  if (streamError) {
+    console.log(`\r\n${C.red}[Erreur ${providerDisplayName()}] ${streamError}${C.reset}\r\n`);
+  } else if (!fullResponse) {
+    console.log(`\r\n${C.yellow}(Réponse vide du modèle ${CURRENT_MODEL} : réessaie ou choisis un autre modèle via /model)${C.reset}`);
+  }
+  if (!fullResponse) { messages.pop(); return; }
 
   messages.push({ role: 'assistant', content: fullResponse });
   persistTranscript(userText, fullResponse);

@@ -163,7 +163,7 @@ async function runRegressionTests() {
   assert(helpOutput.includes('/help') && helpOutput.includes('/model') && helpOutput.includes('/clear'), 'Commande /help du Runner OpenRouter Direct');
 
   const modelsOutput = runAgentWithInput('/models\n/exit\n');
-  assert(modelsOutput.includes('openrouter/free') && modelsOutput.includes('deepseek/deepseek-r1:free'), 'Commande /models du Runner OpenRouter Direct');
+  assert(modelsOutput.includes('openrouter/free') && modelsOutput.includes('nvidia/nemotron-3-super-120b-a12b:free'), 'Commande /models du Runner OpenRouter Direct');
 
   // ---------------------------------------------------------------------------
   // Test 5 : Connexion Live API OpenRouter avec le Runner
