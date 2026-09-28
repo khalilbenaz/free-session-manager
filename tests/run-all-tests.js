@@ -6,6 +6,7 @@
 const { runSecurityTests } = require('./security-tests');
 const { runPerformanceTests } = require('./performance-tests');
 const { runRegressionTests } = require('./regression-tests');
+const { runDirectProviderTests } = require('./direct-provider-tests');
 
 async function main() {
   console.log('════════════════════════════════════════════════════════════════════════════');
@@ -17,9 +18,10 @@ async function main() {
   const sec = await runSecurityTests();
   const perf = await runPerformanceTests();
   const reg = await runRegressionTests();
+  const dp = await runDirectProviderTests();
 
-  const totalPassed = sec.passed + perf.passed + reg.passed;
-  const totalFailed = sec.failed + perf.failed + reg.failed;
+  const totalPassed = sec.passed + perf.passed + reg.passed + dp.passed;
+  const totalFailed = sec.failed + perf.failed + reg.failed + dp.failed;
   const totalDuration = ((Date.now() - startTotal) / 1000).toFixed(2);
 
   console.log('\n════════════════════════════════════════════════════════════════════════════');

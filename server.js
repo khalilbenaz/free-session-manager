@@ -10,7 +10,7 @@ const pty = require('node-pty');
 const { WebSocketServer } = require('ws');
 const {
   ROOT, PORT, IS_WIN, IS_MAC, DATA, LEGACY_DATA,
-  which, resolveNode, resolveKilo, hasKilo, resolveOpencode, hasOpencode, resolveOpenrouter, hasOpenrouter, resolveClaude, resolveAgy, hasClaude, hasAgy, stablePath,
+  which, resolveNode, resolveKilo, hasKilo, resolveOpencode, hasOpencode, resolveOpenrouter, hasOpenrouter, resolveDirectAgent, resolveClaude, resolveAgy, hasClaude, hasAgy, stablePath,
   CLAUDE_DIR, CLAUDE_HISTORY_FILE, CLAUDE_PROJECTS_DIR,
   BRAIN_DIR, AGY_HISTORY_FILE, GEMINI_CONFIG_DIR
 } = require('./lib/config');
@@ -60,6 +60,7 @@ const NODE_BIN = resolveNode();
 const KILO = resolveKilo();
 const OPENCODE = resolveOpencode();
 const OPENROUTER = resolveOpenrouter();
+const DIRECT_AGENT = resolveDirectAgent();
 const CLAUDE = resolveClaude();
 const AGY = resolveAgy();
 
@@ -310,10 +311,16 @@ function handleTerminalQueries(s, p, data) {
 }
 
 function spawnSession(s, { resume, fork } = {}) {
-  const isOpencode = s.agent === 'opencode';
-  const isOpenrouter = s.agent === 'openrouter';
-  const isKilo = !isOpencode && !isOpenrouter;
-  const binary = isOpencode ? OPENCODE : (isOpenrouter ? NODE_BIN : KILO);
+  // Les trois agents (kilo/opencode/openrouter) sont tous natifs et lancés via
+  // le runner générique bin/direct-agent.js --provider <agent>, exécuté par
+  // notre propre Node.js (NODE_BIN). Plus aucune dépendance à un binaire CLI
+  // tiers (KILO/OPENCODE ne servent plus qu'à la détection dans lib/agents.js
+  // et au repli natif interne de direct-agent.js pour OpenCode).
+  const VALID_AGENTS = ['kilo', 'opencode', 'openrouter'];
+  const agent = VALID_AGENTS.includes(s.agent) ? s.agent : 'kilo';
+  const isOpencode = agent === 'opencode';
+  const isOpenrouter = agent === 'openrouter';
+  const binary = NODE_BIN;
 
   let explicitModel = s.model || '';
   let explicitEffort = s.effort || '';
@@ -337,46 +344,20 @@ function spawnSession(s, { resume, fork } = {}) {
     else extraArgs.push(a);
   }
 
-  const defaultModel = agentDefaults(s.agent).model;
+  const defaultModel = agentDefaults(agent).model;
   const effectiveModel = explicitModel || defaultModel;
   s.model = effectiveModel;
 
-  const args = [];
+  const args = [DIRECT_AGENT, '--provider', agent];
 
-  if (isOpencode) {
-    const rawArgs = splitArgs(process.env.SM_OPENCODE_ARGS || '');
-    args.push(...rawArgs);
-    if (resume) args.push('--session', resume);
-    args.push('--model', effectiveModel);
-    if (explicitMode === 'dangerously-skip-permissions') {
-      args.push('--auto');
-    }
-    if (firstPrompt) {
-      args.push('--prompt', firstPrompt);
-    }
-  } else if (isOpenrouter) {
-    // Session OpenRouter 100% Directe (Node.js natif, sans passer par Kilo)
-    args.push(OPENROUTER);
-    const rawArgs = splitArgs(process.env.SM_OPENROUTER_ARGS || '');
-    args.push(...rawArgs);
-    if (resume) args.push('--session', resume);
-    else if (s.id) args.push('--session', s.id);
-    args.push('--model', effectiveModel);
-    if (firstPrompt) {
-      args.push('--prompt', firstPrompt);
-    }
-  } else {
-    // Kilo
-    const rawArgs = splitArgs(process.env.SM_KILO_ARGS || '');
-    args.push(...rawArgs);
-    if (resume) args.push('--session', resume);
-    args.push('--model', effectiveModel);
-    if (explicitMode === 'dangerously-skip-permissions') {
-      args.push('--auto');
-    }
-    if (firstPrompt) {
-      args.push('--prompt', firstPrompt);
-    }
+  const rawArgsEnv = isOpencode ? 'SM_OPENCODE_ARGS' : (isOpenrouter ? 'SM_OPENROUTER_ARGS' : 'SM_KILO_ARGS');
+  const rawArgs = splitArgs(process.env[rawArgsEnv] || '');
+  args.push(...rawArgs);
+  if (resume) args.push('--session', resume);
+  else if (s.id) args.push('--session', s.id);
+  args.push('--model', effectiveModel);
+  if (firstPrompt) {
+    args.push('--prompt', firstPrompt);
   }
 
   args.push(...extraArgs);
@@ -385,7 +366,7 @@ function spawnSession(s, { resume, fork } = {}) {
   const env = {
     ...process.env,
     SM_ID: s.id,
-    SM_AGENT: isOpencode ? 'opencode' : (isOpenrouter ? 'openrouter' : 'kilo'),
+    SM_AGENT: agent,
     SM_PORT: String(PORT),
     SM_TOKEN: HOOK_TOKEN,
     FSM_ID: s.id,
@@ -395,12 +376,14 @@ function spawnSession(s, { resume, fork } = {}) {
     OPENROUTER_API_TOKEN: openrouterKey,
     COLORTERM: 'truecolor',
   };
+  if (process.env.KILO_API_KEY) env.KILO_API_KEY = process.env.KILO_API_KEY;
+  if (process.env.OPENCODE_API_KEY) env.OPENCODE_API_KEY = process.env.OPENCODE_API_KEY;
 
   // Évite les propagations indésirables d'agents parents
   for (const k of Object.keys(env)) {
     if (/^(CLAUDECODE|CLAUDE_CODE_|CLAUDE_PID$|CLAUDE_EFFORT$|AI_AGENT$|ANTIGRAVITY_AGENT|ELECTRON_RUN_AS_NODE$)/i.test(k)) delete env[k];
   }
-  if (isOpenrouter && binary === process.execPath && process.versions.electron) {
+  if (binary === process.execPath && process.versions.electron) {
     env.ELECTRON_RUN_AS_NODE = '1';
   }
 
