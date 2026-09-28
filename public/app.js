@@ -198,6 +198,19 @@ function ensureTerm(id) {
     if ((IS_MAC ? e.metaKey : e.ctrlKey) && (e.key === '=' || e.key === '+' || e.key === '-' || e.key === '0')) { zoom(e.key); e.preventDefault(); return false; }
     return true;
   });
+  // Molette / trackpad : xterm 6 ignore les petits deltas en pixels (trackpad macOS) → défilement géré ici,
+  // en cumulant les pixels jusqu'à une ligne. Hors mode souris de l'agent seulement (sinon xterm transmet).
+  let wheelAcc = 0;
+  term.attachCustomWheelEventHandler(e => {
+    if (e.ctrlKey || term.modes.mouseTrackingMode !== 'none' || term.buffer.active.type !== 'normal') return true;
+    const cell = term._core?._renderService?.dimensions?.css?.cell?.height || term.options.fontSize * 1.2;
+    const lines = e.deltaMode === 1 ? e.deltaY : e.deltaMode === 2 ? e.deltaY * term.rows : e.deltaY / cell;
+    wheelAcc += e.shiftKey || e.altKey ? lines * 5 : lines;
+    const n = Math.trunc(wheelAcc);
+    if (n) { wheelAcc -= n; term.scrollLines(n); }
+    e.preventDefault();
+    return false;
+  });
   const t = { term, fit, el };
   terms.set(id, t);
   return t;
@@ -230,6 +243,9 @@ function fitOne(id, redraw) {
   const t = id && terms.get(id);
   if (!t || !t.el.classList.contains('show')) return;
   try { t.fit.fit(); } catch { }
+  // un terminal resté caché (display:none) garde une barre de défilement fausse : la recalculer
+  const resync = () => { try { t.term._core?._viewport?._sync?.(); } catch { } };
+  resync(); requestAnimationFrame(resync); setTimeout(resync, 200);
   const { cols, rows } = t.term;
   if (!redraw && t.sent === `${cols}x${rows}`) return;
   t.sent = `${cols}x${rows}`;
