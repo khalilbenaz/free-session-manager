@@ -259,7 +259,15 @@ function spawnSession(s, { resume, fork } = {}) {
   }
 
   const defaultModel = agentDefaults(agent).model;
-  const effectiveModel = explicitModel || defaultModel;
+  // Modèle enregistré qui n'est plus gratuit (ex. deepseek-r1:free) : on repart sur
+  // le modèle par défaut au lieu de relancer une session vouée à l'erreur.
+  const retired = explicitModel && require('./lib/agents').isRetiredModel(agent, explicitModel);
+  if (retired) {
+    console.log(`[fsm] ${explicitModel} n'est plus gratuit : remplacé par ${defaultModel}`);
+    s.args = splitArgs(s.args || '').filter((a, i, arr) => !(a === '--model' || arr[i - 1] === '--model' || a.startsWith('--model='))).join(' ');
+    if (s.agentCfg?.[agent]) s.agentCfg[agent].model = defaultModel;
+  }
+  const effectiveModel = (!retired && explicitModel) || defaultModel;
   s.model = effectiveModel;
 
   const args = [DIRECT_AGENT, '--provider', agent];
@@ -880,6 +888,7 @@ const ctx = {
 for (const mod of ['lock', 'git', 'settings', 'usage', 'tools', 'queue', 'agents']) {
   try { require(`./lib/${mod}`)(ctx); } catch (e) { console.error(`module ${mod} :`, e); }
 }
+require('./lib/agents').warmCatalog().catch(() => { }); // catalogue gratuit prêt avant les relances
 
 server.on('error', e => { console.error('écoute impossible', e.message); process.exit(1); });
 server.listen(PORT, HOST, () => {
